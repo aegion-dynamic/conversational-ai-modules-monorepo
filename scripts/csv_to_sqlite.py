@@ -13,29 +13,30 @@ from discord_bot.parameters import (
     SQLITE_DB_FILE,
 )
 
-try:
-    # Read the CSV file into a DataFrame
-    # Attempt using UTF-8 encoding first
+def convert_csv_to_sqlite():
     try:
-        df = pd.read_csv(PRODUCT_DESCRIPTIONS_CSV)
-    except UnicodeDecodeError:
-        # If UTF-8 fails, fall back to ISO-8859-1
-        df = pd.read_csv(PRODUCT_DESCRIPTIONS_CSV, encoding="ISO-8859-1")
+        # Read the CSV file into a DataFrame
+        # Attempt using UTF-8 encoding first
+        try:
+            df = pd.read_csv(PRODUCT_DESCRIPTIONS_CSV)
+        except UnicodeDecodeError:
+            # If UTF-8 fails, fall back to ISO-8859-1
+            df = pd.read_csv(PRODUCT_DESCRIPTIONS_CSV, encoding="ISO-8859-1")
 
-    # Connect to the SQLite database
-    conn = sqlite3.connect(SQLITE_DB_FILE)
+        # Connect to the SQLite database
+        conn = sqlite3.connect(SQLITE_DB_FILE)
 
-    # Write the DataFrame to a SQLite table
-    df.to_sql(SQL_TABLE_NAME, conn, if_exists="replace", index=False)
+        # Write the DataFrame to a SQLite table
+        df.to_sql(SQL_TABLE_NAME, conn, if_exists="replace", index=False)
 
-    print(f"Data written to {SQLITE_DB_FILE}")
+        print(f"Data written to {SQLITE_DB_FILE}")
 
-    # Commit the changes
-    conn.commit()
+        # Commit the changes
+        conn.commit()
 
-except Exception as e:
-    print(f"An error occurred: {e}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
-finally:
-    # Close the connection
-    conn.close()
+    finally:
+        # Close the connection
+        conn.close() # type: ignore

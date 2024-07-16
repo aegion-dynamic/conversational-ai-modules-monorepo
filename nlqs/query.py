@@ -12,6 +12,7 @@ from langchain_community.document_loaders.csv_loader import CSVLoader
 from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from pandas import DataFrame
 from pydantic.v1 import SecretStr
 
 from discord_bot.parameters import (
@@ -21,7 +22,11 @@ from discord_bot.parameters import (
     SQL_TABLE_NAME,
     SQLITE_DB_FILE,
 )
-from nlqs.database.sqlite import fetch_data_from_sqlite
+from nlqs.database.sqlite import SQLiteDriver
+config = {"db_file": SQLITE_DB_FILE}
+driver = SQLiteDriver(config)
+driver.connect()
+
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -65,7 +70,7 @@ def get_chroma_collections() -> chromadb.Collection:
     Returns:
         Chroma: Chroma collection.
     """
-    chroma_client: chromadb.ClientAPI = chromadb.PersistentClient()
+    chroma_client  = chromadb.PersistentClient()
     collection_name = CHROMA_COLLECTION_NAME
     collections = [col.name for col in chroma_client.list_collections()]
     print(collections)
@@ -77,7 +82,7 @@ def get_chroma_collections() -> chromadb.Collection:
         print("Creating new collection...")
         collection = chroma_client.create_collection(collection_name)
 
-        data = fetch_data_from_sqlite(Path(SQLITE_DB_FILE), SQL_TABLE_NAME)
+        data: DataFrame = driver.fetch_data_from_sqlite(SQL_TABLE_NAME)
 
         data["combined_text"] = data[
             ["Product", "Category", "PackageID", "MedicalBenefitsReported", "Description"]
@@ -182,13 +187,10 @@ def summarize(
     You will receive a user input and the chat history. Your task is to:
     1. Analyze the user input and identify key details based on our available data and chat history.
     2. Summarize the input, classifying the data into qualitative and quantitative categories.
-    3. Identify Relevant Columns:
-        - Determine which columns from the data are needed to provide an answer.
-        - Pay close attention to the user's intent and specific mentions of data columns:
-        - Are they seeking information about products, medications, treatments, or other relevant categories?
-        - If the user is seeking information about a product, provide the URL of the product if available.
-        - Look for explicit mentions of column names, synonyms, or phrases indicating the type of information requested. 
-        - If the user specifies certain attributes or metrics, consider these as user-requested columns.
+    3. Identify relevant columns from which we can provide an answer. Pay close attention to the user's intent and specific mentions of data columns:
+       - Are they seeking information about products, medications, treatments, or other relevant categories?
+       - If the user is seeking information about a product, also provide the URL of the product if available.
+       - Look for explicit mentions of column names, synonyms, or phrases that indicate the type of information requested. If the user specifies certain attributes or metrics, consider these as user-requested columns.
     4. Classify the user's intent. Possible intents include: phatic_communication, sql_injection, profanity, and other.
     5. Output the result in a JSON format.
     6. Do not output any other information except the JSON. Do not add [OUT], [/OUT] to the output.(!important)

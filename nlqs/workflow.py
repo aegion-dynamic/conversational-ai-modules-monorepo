@@ -1,11 +1,8 @@
 import re
 from typing import Dict, List, Tuple
 
-from nlqs.database.sqlite import (
-    execute_query,
-    retrieve_descriptions_and_types_from_db,
-    validate_query,
-)
+from discord_bot.parameters import SQLITE_DB_FILE
+from nlqs.database.sqlite import SQLiteDriver
 from nlqs.query import (
     generate_query,
     get_chroma_collections,
@@ -13,14 +10,19 @@ from nlqs.query import (
     summarize,
 )
 
+config = {"db_file": SQLITE_DB_FILE}
+driver = SQLiteDriver(config)
+driver.connect()
+
 try:
-    column_descriptions, numerical_columns, categorical_columns = retrieve_descriptions_and_types_from_db()
+    column_descriptions, numerical_columns, categorical_columns = driver.retrieve_descriptions_and_types_from_db()
 except Exception as e:
     print(e)
-    from scripts import csv_to_sqlite
-    from scripts.description_generator import store_descriptions_in_db
+    from scripts.csv_to_sqlite import convert_csv_to_sqlite
+    convert_csv_to_sqlite()
+    from nlqs.description_generator import store_descriptions_in_db
 
-    column_descriptions, numerical_columns, categorical_columns = retrieve_descriptions_and_types_from_db()
+    column_descriptions, numerical_columns, categorical_columns = driver.retrieve_descriptions_and_types_from_db()
 
 chroma_collections = get_chroma_collections()
 
@@ -83,9 +85,9 @@ def main_workflow(
                 numerical_columns_list,
                 categorical_columns_list,
             )
-            if validate_query(genenerted_query):
-                query_result = execute_query(genenerted_query)
-                if query_result == str([]):
+            if driver.validate_query(genenerted_query):
+                query_result = driver.execute_query(genenerted_query)
+                if query_result == "No results found.":
                     query_result = similarity_search(collections, user_input)
                 response = query_result
             else:
