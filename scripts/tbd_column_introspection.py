@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from discord_bot.parameters import SQL_TABLE_NAME, SQLITE_DB_FILE
-from nlqs.column_introspection import (
+from scripts.column_introspection import (
     fetch_data_from_sqlite,
     generate_sample_data,
     get_column_descriptions,

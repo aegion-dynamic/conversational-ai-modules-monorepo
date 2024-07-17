@@ -29,150 +29,127 @@ logger.addHandler(file_handler)
 
 
 class SQLiteDriver(AbstractDriver):
-
-    def __init__(self, config):
-        pass
+    def __init__(self, config: Dict):
+        self.db_file = config.get("db_file", SQLITE_DB_FILE)
+        self.conn = None
+        self.cursor = None
 
     def connect(self):
-        pass
+        try:
+            self.conn = sqlite3.connect(self.db_file)
+            self.cursor = self.conn.cursor()
+            logger.info("Connected to SQLite database.")
+        except sqlite3.Error as e:
+            logger.error(f"Error connecting to database: {e}")
+            raise
 
     def disconnect(self):
-        pass
+        if self.conn:
+            self.conn.close()
+            logger.info("Disconnected from SQLite database.")
 
-    def execute_query(self, query):
-        pass
+    def execute_query(self, query: str) -> str:
+        """Executes the SQL query and returns the result.
 
-    def retrieve_descriptions_and_types_from_db(self, db_file):
-        pass
+        Args:
+            query (str): the SQL query.
 
-    def validate_query(self, query, db_file):
-        pass
+        Returns:
+            str: the result of the query.
+        """
+        try:
+            self.cursor.execute(query)
+            result = self.cursor.fetchall()
+            self.conn.commit()
+            result_str = str(result)
+            logger.info(f"Query executed successfully: {result_str}")
+            return result_str if result else "No results found."
+        except sqlite3.Error as e:
+            error_message = f"Error executing SQL query: {e}"
+            logger.error(error_message)
+            return error_message
 
+    def retrieve_descriptions_and_types_from_db(self) -> Tuple[Dict[str, str], List[str], List[str]]:
+        """Retrieves descriptions and types from the SQLite database.
 
-def fetch_data_from_sqlite(db_file: Path, table_name: str) -> Optional[pd.DataFrame]:
-    """Fetch data from a SQLite database table.
+        Args:
+            db_file (SQLite database, optional): SQLite database to store all the tables. Defaults to SQLITE_DB_FILE.
 
-    Args:
-        db_file (Path): Path to the SQLite database file.
-        table_name (str): Name of the table to fetch data from.
+        Returns:
+            Tuple[List[str], List[str], List[str]]: Return descriptions, numerical_columns, categorial_columns
+        """
+        # Retrieve descriptions
+        self.cursor.execute("SELECT column_name, description FROM column_descriptions")
+        description_rows = self.cursor.fetchall()
+        descriptions = {row[0]: row[1] for row in description_rows}
 
-    Returns:
-        Optional[pd.DataFrame]: A DataFrame containing the data from the table, or None if an error occurred.
-    """
-    try:
-        conn = sqlite3.connect(db_file)
-        query = f"SELECT * FROM {table_name}"
-        df = pd.read_sql_query(query, conn)
-        conn.close()
-    except sqlite3.Error as e:
-        print(f"Error fetching data: {e}")
-        return None  # Return an empty DataFrame on error
+        # Retrieve column types
+        self.cursor.execute("SELECT column_name, column_type FROM column_types")
+        type_rows = self.cursor.fetchall()
+        numerical_columns = [row[0] for row in type_rows if row[1] == "numerical"]
+        categorical_columns = [row[0] for row in type_rows if row[1] == "categorical"]
 
-    return df
+        return descriptions, numerical_columns, categorical_columns
+        
 
+    def validate_query(self, query: str) -> bool:
+        """Validates the generated SQL query against the database schema and returns True if valid, False otherwise.
 
-def retrieve_descriptions_and_types_from_db(
-    db_file: str = SQLITE_DB_FILE,
-) -> Tuple[Dict[str, str], List[str], List[str]]:
-    """Retrieves descriptions and types from the SQLite database.
+        Args:
+            query (str): sql query to be validated.
+            db_file (str, optional): sqlite database file to be used. Defaults to SQLITE_DB_FILE.
 
-    Args:
-        db_file (SQLite database, optional): SQLite database to store all the tables. Defaults to SQLITE_DB_FILE.
-
-    Returns:
-        Tuple[List[str], List[str], List[str]]: Return descriptions, numerical_columns, categorial_columns
-    """
-    conn = sqlite3.connect(db_file)
-    c = conn.cursor()
-
-    # Retrieve descriptions
-    c.execute("SELECT column_name, description FROM column_descriptions")
-    description_rows = c.fetchall()
-    descriptions = {row[0]: row[1] for row in description_rows}
-
-    # Retrieve column types
-    c.execute("SELECT column_name, column_type FROM column_types")
-    type_rows = c.fetchall()
-    numerical_columns = [row[0] for row in type_rows if row[1] == "numerical"]
-    categorical_columns = [row[0] for row in type_rows if row[1] == "categorical"]
-
-    conn.close()
-    return descriptions, numerical_columns, categorical_columns
-
-
-def validate_query(query: str, db_file: str = SQLITE_DB_FILE) -> bool:
-    """Validates the generated SQL query against the database schema and returns True if valid, False otherwise.
-
-    Args:
-        query (str): sql query to be validated.
-        db_file (str, optional): sqlite database file to be used. Defaults to SQLITE_DB_FILE.
-
-    Returns:
-        bool: True if query is valid, False otherwise.
-    """
-    # Check for basic syntax errors
-    if not query.strip() or not query.lower().startswith("select"):
-        return False
-
-    # Connect to the database
-    try:
-        conn = sqlite3.connect(db_file)
-        cursor = conn.cursor()
-    except sqlite3.Error as e:
-        print(f"Error connecting to database: {e}")
-        return False
-
-    # Extract table name and columns from the query
-    try:
-        match = re.search(r"FROM\s+(.+?)\s+", query, re.IGNORECASE)
-        if match is None:
-            return False
-        table_name = match.group(1).strip()
-        columns = re.findall(r"SELECT\s+(.+?)\s+FROM", query, re.IGNORECASE)[0].strip().split(",")
-    except AttributeError:
-        print("Error extracting table name or columns from query.")
-        return False
-
-    # Check if table exists
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
-    if not cursor.fetchone():
-        print(f"Table '{table_name}' does not exist in the database.")
-        return False
-
-    # Check if columns exist in the table
-    cursor.execute("PRAGMA table_info({})".format(table_name))
-    table_columns = [column[1] for column in cursor.fetchall()]
-    for column in columns:
-        column = column.strip()
-        if column not in table_columns and column != "*":
-            print(f"Column '{column}' does not exist in table '{table_name}'.")
+        Returns:
+            bool: True if query is valid, False otherwise.
+        """
+        if not query.strip() or not query.lower().startswith("select"):
             return False
 
-    # If all checks pass, the query is considered valid
-    return True
+        try:
+            match = re.search(r"FROM\s+(\w+)", query, re.IGNORECASE)
+            if not match:
+                return False
+            table_name = match.group(1).strip()
+
+            column_match = re.search(r"SELECT\s+(.+?)\s+FROM", query, re.IGNORECASE)
+            if not column_match:
+                return False
+            columns = column_match.group(1).strip().split(",")
+
+            self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+            if not self.cursor.fetchone():
+                return False
+
+            self.cursor.execute(f"PRAGMA table_info({table_name})")
+            table_columns = [column[1] for column in self.cursor.fetchall()]
+            for column in columns:
+                column = column.strip()
+                if column not in table_columns and column != "*":
+                    return False
+
+            return True
+        except sqlite3.Error as e:
+            logger.error(f"Error validating query: {e}")
+            return False
 
 
-def execute_query(query: str) -> str:
-    """Executes the SQL query and returns the result.
+    def fetch_data_from_sqlite(self, table_name: str) -> pd.DataFrame:
+        """Fetch data from a SQLite database table.
 
-    Args:
-        query (str): the SQL query.
+        Args:
+            db_file (Path): Path to the SQLite database file.
+            table_name (str): Name of the table to fetch data from.
 
-    Returns:
-        str: the result of the query.
-    """
-    try:
-        # SQLite connection
-        conn = sqlite3.connect(SQLITE_DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute(query)
-        result = cursor.fetchall()
-        conn.close()
-        result = str(result)
-        logger.info(f"Query Result: {result}")
+        Returns:
+            Optional[pd.DataFrame]: A DataFrame containing the data from the table, or None if an error occurred.
+        """
+        try:
+            conn = sqlite3.connect(self.db_file)
+            query = f"SELECT * FROM {table_name}"
+            df = pd.read_sql_query(query, conn)
+            conn.close()
+        except sqlite3.Error as e:
+            print(f"Error fetching data: {e}")
+            return pd.DataFrame()  # Return an empty DataFrame on error
 
-        return result if result else "No results found."
-    except sqlite3.Error as e:
-        error_message = f"Error executing SQL query: {e}"
-        logger.error(f"Error executing SQL query: {e}")
-        return error_message
+        return df
