@@ -102,22 +102,28 @@ class SQLiteDriver(AbstractDriver):
         Returns:
             bool: True if query is valid, False otherwise.
         """
-        if not query.strip() or not query.lower().startswith("select"):
-            return False
+        logger.info(f"Validating query: {query}")
+        print(f"Validating query: {query}")
 
         try:
             match = re.search(r"FROM\s+(\w+)", query, re.IGNORECASE)
             if not match:
+                logger.error("Table name not found in the query.")
+                print("Table name not found in the query.")
                 return False
             table_name = match.group(1).strip()
 
             column_match = re.search(r"SELECT\s+(.+?)\s+FROM", query, re.IGNORECASE)
             if not column_match:
+                logger.error("Column names not found in the query.")
+                print("Column names not found in the query.")
                 return False
             columns = column_match.group(1).strip().split(",")
 
             self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
             if not self.cursor.fetchone():
+                logger.error(f"Table '{table_name}' not found in the database.")
+                print(f"Table '{table_name}' not found in the database.")
                 return False
 
             self.cursor.execute(f"PRAGMA table_info({table_name})")
@@ -125,11 +131,16 @@ class SQLiteDriver(AbstractDriver):
             for column in columns:
                 column = column.strip()
                 if column not in table_columns and column != "*":
+                    logger.error(f"Column '{column}' not found in table '{table_name}'.")
+                    print(f"Column '{column}' not found in table '{table_name}'.")
                     return False
 
+            logger.info("Query validated successfully.")
+            print("Query validated successfully.")
             return True
         except sqlite3.Error as e:
             logger.error(f"Error validating query: {e}")
+            print(f"Error validating query: {e}")
             return False
 
 
