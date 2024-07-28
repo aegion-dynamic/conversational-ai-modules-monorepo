@@ -93,32 +93,21 @@ class TreeOfThoughtsExecutor:
             return result
         except Exception as e:
             logging.error(f"Error during execution: {e}")
-            raise TreeOfThoughtsError(f"An error occurred during execution: {e}")
 
-class TreeOfThoughtsError(Exception):
-    """Custom exception class for Tree of Thoughts errors."""
-    pass
 
-# Example usage
-if __name__ == "__main__":
-    sample_csv_data = """
-    Location,Room,Product,Category,PackageID,Batch,CBD,THC,CBDA,CBG,CBN,THCA,CustomerRating,MedicalBenefitsReported,RepeatPurchaseFrequency,URL,Description
-    Hennep,Sales Floor,Tangerine | 1:1:1 THC:CBD:CBG Gummies 20pk,Gummies,1A40A0300001771000037968,120423TNG100,1.29 mg/g,1.53 mg/g,0.0 mg/g,1.29 mg/g,0.07 mg/g,0.0 mg/g,7,Improved sleep,Often,http://example.com/products/gummies/tangerine-|-1:1:1-thc:cbd:cbg-gummies-20pk,"Introducing our top-rated Tangerine 1:1:1 THC:CBD:CBG Gummies, carefully crafted to deliver a harmonious blend of therapeutic benefits in every bite. With a perfect balance of THC, CBD, and CBG in each delicious gummy, these tantalizing treats are designed to elevate your wellness routine with a touch of citrusy bliss.
 
-    Experience the soothing effects of these gummies on your journey to a restful night's sleep. Our customers rave about the results"
-    Hennep,Sales Floor,S'mores | Milk Chocolate Bar 20pk,ChocolateBar,1A40A0300001771000037569,081623SMCB100,0.0 mg/g,2.12 mg/g,0.0 mg/g,0.1 mg/g,0.05 mg/g,0.0 mg/g,4,Anxiety reduction,Rarely,http://example.com/products/chocolatebar/s'mores-|-milk-chocolate-bar-20pk,"Indulge in the creamy goodness of our S'mores | Milk Chocolate Bar 20pk, the perfect treat for those craving a decadent experience. Made with premium quality milk chocolate, each bar is meticulously crafted to deliver a rich and satisfying flavor that will melt in your mouth with every bite.
 
-    Not only does our S'mores | Milk Chocolate Bar offer a delicious taste sensation, but it also provides potential medical benefits by helping to reduce anxiety. So, whether you need a sweet pick-me-up"
-    """
-    user_query = "What category does 1906 Drops fall into?,"
-    load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY") # Replace with your actual API key
+# # Example usage
+# if __name__ == "__main__":
 
-    try:
-        executor = TreeOfThoughtsExecutor(sample_csv_data=sample_csv_data, api_key=api_key)
-        output = executor.execute(user_query=user_query, num_thoughts=3, max_steps=3, best_states_count=2)
-        print(json.dumps(output, indent=2))
-    except TreeOfThoughtsError as e:
-        print(f"An error occurred: {e}")
-    except ValueError as e:
-        print(f"Invalid input: {e}")
+#     load_dotenv()
+#     api_key = os.getenv("OPENAI_API_KEY") # Replace with your actual API key
+
+#     try:
+#         executor = TreeOfThoughtsExecutor(sample_csv_data=sample_csv_data, api_key=api_key)
+#         output = executor.execute(user_query=user_query, num_thoughts=3, max_steps=3, best_states_count=2)
+#         print(json.dumps(output, indent=2))
+#     except TreeOfThoughtsError as e:
+#         print(f"An error occurred: {e}")
+#     except ValueError as e:
+#         print(f"Invalid input: {e}")

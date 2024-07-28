@@ -83,17 +83,17 @@ class TreeOfThoughtsError(Exception):
     """Custom exception class for Tree of Thoughts errors."""
     pass
 
-# Example usage
-if __name__ == "__main__":
-    user_query = "explain me the complete lifecycle of mlops"
-    load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY") # Replace with your actual API key
+# # Example usage
+# if __name__ == "__main__":
+#     user_query = "explain me the complete lifecycle of mlops"
+#     load_dotenv()
+#     api_key = os.getenv("OPENAI_API_KEY") # Replace with your actual API key
 
-    try:
-        executor = TreeOfThoughtsExecutor(api_key=api_key)
-        output = executor.execute(user_query=user_query, num_thoughts=3, max_steps=3, best_states_count=2)
-        print(json.dumps(output, indent=2))
-    except TreeOfThoughtsError as e:
-        print(f"An error occurred: {e}")
-    except ValueError as e:
-        print(f"Invalid input: {e}")
+#     try:
+#         executor = TreeOfThoughtsExecutor(api_key=api_key)
+#         output = executor.execute(user_query=user_query, num_thoughts=3, max_steps=3, best_states_count=2)
+#         print(json.dumps(output, indent=2))
+#     except TreeOfThoughtsError as e:
+#         print(f"An error occurred: {e}")
+#     except ValueError as e:
+#         print(f"Invalid input: {e}")
