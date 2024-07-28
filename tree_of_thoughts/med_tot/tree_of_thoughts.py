@@ -1,11 +1,211 @@
 import json
+import io
+import csv
 import openai
 import logging
 from typing import List, Dict, Any, Tuple
-from sample_data_manager import SampleDataManager
-from intent_classifier import IntentClassifier
-from thought_generator import ThoughtGenerator
-from state_evaluator import StateEvaluator
+
+class SampleDataManager:
+    """Manages the sample data used for analysis."""
+
+    def __init__(self, csv_data: str):
+        """
+        Initialize the SampleDataManager with CSV data.
+
+        Args:
+            csv_data (str): CSV-formatted string containing sample data.
+        """
+        self.sample_data = self._load_sample_data(csv_data)
+
+    def _load_sample_data(self, csv_data: str) -> List[Dict[str, Any]]:
+        """
+        Load sample data from CSV string into a list of dictionaries.
+
+        Args:
+            csv_data (str): CSV-formatted string containing sample data.
+
+        Returns:
+            List[Dict[str, Any]]: List of dictionaries representing the sample data.
+        """
+        try:
+            csv_file = io.StringIO(csv_data.strip())
+            reader = csv.DictReader(csv_file)
+            return [row for row in reader]
+        except csv.Error as e:
+            print(f"Error loading CSV data: {e}")
+            return []
+
+    def get_sample_data(self) -> str:
+        """
+        Get the sample data as a JSON-formatted string.
+
+        Returns:
+            str: JSON-formatted string of the sample data.
+        """
+        try:
+            return json.dumps(self.sample_data, indent=2)
+        except json.JSONEncodeError as e:
+            print(f"Error encoding sample data to JSON: {e}")
+            return "[]"
+
+class IntentClassifier:
+    """Classifies the user's intent based on their input."""
+
+    def __init__(self, api_key: str):
+        """
+        Initialize the IntentClassifier with an OpenAI API key.
+
+        Args:
+            api_key (str): OpenAI API key for accessing the language model.
+        """
+        self.api_key = api_key
+        openai.api_key = self.api_key
+
+    def classify_intent(self, user_input: str) -> str:
+        """
+        Classify the user's intent based on their input.
+
+        Args:
+            user_input (str): The user's input text.
+
+        Returns:
+            str: A string representing the classified intent.
+        """
+        prompt = f"""
+        Classify the user's intent based on the following input:
+
+        User Input: {user_input}
+
+        Possible intents:
+        1. Phatic communication (greetings, farewells, etc.)
+        2. Profanity or vulgar input
+        3. SQL injection attempt
+        4. Information request
+        5. Other (not related to available data)
+
+        Respond with only the number corresponding to the intent.
+        """
+
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant classifying user intent."},
+            {"role": "user", "content": prompt}
+        ]
+
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=messages,
+                max_tokens=1,
+                n=1,
+                temperature=0.3
+            )
+
+            intent = response.choices[0].message['content'].strip()
+            return intent
+        except Exception as e:
+            print(f"Error in intent classification: {e}")
+            return "4"  # Default to information request in case of error
+
+class ThoughtGenerator:
+    """Generates thoughts based on the current state."""
+
+    def __init__(self, api_key: str):
+        """
+        Initialize the ThoughtGenerator with an OpenAI API key.
+
+        Args:
+            api_key (str): OpenAI API key for accessing the language model.
+        """
+        self.api_key = api_key
+        openai.api_key = self.api_key
+
+    def generate_thoughts(self, current_state: str, num_thoughts: int) -> List[str]:
+        """
+        Generate possible next thoughts based on the current state.
+
+        Args:
+            current_state (str): The current state of the problem-solving process.
+            num_thoughts (int): The number of thoughts to generate.
+
+        Returns:
+            List[str]: A list of generated thoughts.
+        """
+        prompt = f"Given the current state of the problem:\n\n{current_state}\n\nGenerate {num_thoughts} possible next thoughts or considerations. Each thought should provide a new perspective or additional information that could be relevant to addressing the problem."
+        
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant generating thoughts for problem-solving."},
+            {"role": "user", "content": prompt},
+            {"role": "user", "content": f"Your response should be in the following format:\n1. [First thought]\n2. [Second thought]\n...\n{num_thoughts}. [Last thought]"}
+        ]
+        
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=messages,
+                max_tokens=100,
+                n=1,
+                temperature=0.7
+            )
+
+            thoughts_text = response.choices[0].message['content'].strip()
+            thoughts = [thought.split('. ', 1)[1] for thought in thoughts_text.split('\n') if '. ' in thought]
+            return thoughts[:num_thoughts]  # Ensure we return exactly num_thoughts thoughts
+        except Exception as e:
+            print(f"Error in thought generation: {e}")
+            return [f"Error in thought generation: {e}"] * num_thoughts
+
+class StateEvaluator:
+    """Evaluates the relevance and usefulness of each state."""
+
+    def __init__(self, api_key: str):
+        """
+        Initialize the StateEvaluator with an OpenAI API key.
+
+        Args:
+            api_key (str): OpenAI API key for accessing the language model.
+        """
+        self.api_key = api_key
+        openai.api_key = self.api_key
+
+    def evaluate_states(self, states: List[str]) -> List[float]:
+        """
+        Evaluate the relevance and usefulness of each state for the problem.
+
+        Args:
+            states (List[str]): A list of states to evaluate.
+
+        Returns:
+            List[float]: A list of numerical ratings for each state.
+        """
+        prompt = f"Evaluate the following states in terms of their relevance and usefulness for addressing the problem. Rate each state on a scale of 0 to 10, where 10 is the most relevant and useful."
+        
+        states_text = "\n".join(f"{i+1}. {state}" for i, state in enumerate(states))
+        
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant evaluating problem-solving states."},
+            {"role": "user", "content": f"{prompt}\n\n{states_text}"},
+            {"role": "user", "content": "Provide only the numerical ratings, one per line:"}
+        ]
+        
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=messages,
+                max_tokens=100,
+                n=1,
+                temperature=0.3
+            )
+
+            ratings_text = response.choices[0].message['content'].strip()
+            ratings = [float(rating) for rating in ratings_text.split('\n') if rating.replace('.', '').isdigit()]
+            
+            # Ensure we have a rating for each state
+            if len(ratings) < len(states):
+                ratings.extend([0.0] * (len(states) - len(ratings)))
+            return ratings[:len(states)]
+        except Exception as e:
+            print(f"Error in state evaluation: {e}")
+            return [0.0] * len(states)
 
 class TreeOfThoughts:
     """Implements the Tree of Thoughts algorithm with improved qualitative data extraction and handling of user-requested columns."""
@@ -31,16 +231,16 @@ class TreeOfThoughts:
         self.state_evaluator = state_evaluator
         self.logger = logging.getLogger(__name__)
 
-    def solve(self, user_input: str, chat_history: List[str], k: int = 3, T: int = 3, b: int = 2) -> Dict[str, Any]:
+    def solve(self, user_input: str, chat_history: List[str], num_thoughts: int = 3, max_steps: int = 3, best_states_count: int = 2) -> Dict[str, Any]:
         """
         Solve the problem using the Tree of Thoughts approach.
 
         Args:
             user_input (str): The user's input query.
             chat_history (List[str]): The chat history.
-            k (int): Number of thoughts to generate at each step.
-            T (int): Maximum number of thinking steps.
-            b (int): Number of best states to keep at each step.
+            num_thoughts (int): Number of thoughts to generate at each step.
+            max_steps (int): Maximum number of thinking steps.
+            best_states_count (int): Number of best states to keep at each step.
 
         Returns:
             Dict[str, Any]: The final output as a dictionary.
@@ -67,31 +267,31 @@ class TreeOfThoughts:
 
         initial_state = f"User Input: {user_input}\nChat History: {chat_history}"
         self.logger.info("Starting tree search")
-        best_state, thought_path = self._tree_search(initial_state, k, T, b)
+        best_state, thought_path = self._tree_search(initial_state, num_thoughts, max_steps, best_states_count)
         self.logger.info("Tree search completed")
         return self._generate_json_output(best_state, thought_path)
 
-    def _tree_search(self, initial_state: str, k: int, T: int, b: int) -> Tuple[str, List[str]]:
+    def _tree_search(self, initial_state: str, num_thoughts: int, max_steps: int, best_states_count: int) -> Tuple[str, List[str]]:
         """
         Perform tree search to explore the thought space.
 
         Args:
             initial_state (str): The initial state of the problem.
-            k (int): Number of thoughts to generate at each step.
-            T (int): Maximum number of thinking steps.
-            b (int): Number of best states to keep at each step.
+            num_thoughts (int): Number of thoughts to generate at each step.
+            max_steps (int): Maximum number of thinking steps.
+            best_states_count (int): Number of best states to keep at each step.
 
         Returns:
             Tuple[str, List[str]]: The best final state and the path of thoughts leading to it.
         """
-        self.logger.info(f"Starting tree search with k={k}, T={T}, b={b}")
+        self.logger.info(f"Starting tree search with num_thoughts={num_thoughts}, max_steps={max_steps}, best_states_count={best_states_count}")
         states = [(initial_state, [])]  # (state, path)
 
-        for step in range(T):
+        for step in range(max_steps):
             self.logger.info(f"Tree search step {step + 1}")
             new_states = []
             for state, path in states:
-                new_thoughts = self.thought_generator.generate_thoughts(state, k)
+                new_thoughts = self.thought_generator.generate_thoughts(state, num_thoughts)
                 self.logger.debug(f"Generated {len(new_thoughts)} new thoughts")
                 new_states.extend([(f"{state}\nThought: {thought}", path + [thought]) for thought in new_thoughts])
 
@@ -100,7 +300,7 @@ class TreeOfThoughts:
                 break
 
             values = self.state_evaluator.evaluate_states([state for state, _ in new_states])
-            states = sorted(zip(new_states, values), key=lambda x: x[1], reverse=True)[:b]
+            states = sorted(zip(new_states, values), key=lambda x: x[1], reverse=True)[:best_states_count]
             states = [state for state, _ in states]
             self.logger.info(f"Selected {len(states)} best states")
 
@@ -161,6 +361,7 @@ class TreeOfThoughts:
         The columns present in our database are: "Location,Room,Product,Category,PackageID,Batch,CBD,THC,CBDA,CBG,CBN,THCA,CustomerRating,MedicalBenefitsReported,RepeatPurchaseFrequency,URL,Description"
         """
 
+      
         messages = [
             {"role": "system", "content": "You are a helpful assistant generating detailed JSON output based on analysis results. Focus on providing rich, relevant qualitative data along with supporting quantitative information. Be precise in identifying user-requested columns, returning an empty list if none are explicitly or implicitly requested."},
             {"role": "user", "content": prompt}
