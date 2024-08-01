@@ -6,18 +6,19 @@ import csv
 import os
 import re
 
-from nlqs.database.sqlite import (
-    execute_query,
-    retrieve_descriptions_and_types_from_db,
-    validate_query,
-)
-from nlqs.query import generate_query, get_chroma_instance, similarity_search, summarize
+from discord_bot.parameters import SQLITE_DB_FILE
+from nlqs.database.sqlite import SQLiteDriver
+from nlqs.query import generate_query, get_chroma_collections, similarity_search, summarize
+
+config = {"db_file": SQLITE_DB_FILE}
+driver = SQLiteDriver(config)
+driver.connect()
 
 # CSV file paths
-TEST_CASES_FILE = "test_cases.csv"
+TEST_CASES_FILE = "./test_cases.csv"
 BENCHMARK_RESULTS_FILE = "benchmark_results.csv"
 
-data_vectors = get_chroma_instance()
+data_vectors = get_chroma_collections()
 
 
 # Main chat function
@@ -25,7 +26,7 @@ def chat_benchmark(user_input, chat_history):
     if not user_input:
         return chat_history, "", []
 
-    column_descriptions, numerical_columns, categorical_columns = retrieve_descriptions_and_types_from_db()
+    column_descriptions, numerical_columns, categorical_columns = driver.retrieve_descriptions_and_types_from_db()
 
     user_input = re.sub(r"{|}", "", user_input)
     summarized_input = summarize(user_input, chat_history, column_descriptions, numerical_columns, categorical_columns)
@@ -46,6 +47,7 @@ def chat_benchmark(user_input, chat_history):
             "none",
             "",  # Placeholder for query
             "",  # Placeholder for query result
+            "",  # Placeholder for similarity search result
             "",  # Placeholder for response
         ]
         return chat_history, response, log_data
@@ -60,27 +62,28 @@ def chat_benchmark(user_input, chat_history):
         intent,
         "",  # Placeholder for query
         "",  # Placeholder for query result
+        "",  # Placeholder for similarity search result
         "",  # Placeholder for response
     ]
 
-    if intent == "phatic_communication" or intent == "sql_injection" or intent == "profanity":
+    if intent == "sql_injection" or intent == "profanity":
         response = "Sorry, I cannot process this request."
         chat_history.append((user_input, response))
-        log_data[8] = response
+        log_data[9] = response
         return chat_history, response, log_data
 
     if summarized_input.user_requested_columns:
         genenerted_query = generate_query(
             user_input, summarized_input, chat_history, column_descriptions, numerical_columns, categorical_columns
         )
-        if validate_query(genenerted_query):
-            query_result = execute_query(genenerted_query)
+        if driver.validate_query(genenerted_query):
+            query_result = driver.execute_query(genenerted_query)
             log_data[6] = genenerted_query
 
-            if query_result == str([]):
+            if query_result == "No results found.":
                 similarity_result = similarity_search(data_vectors, user_input)
                 response = "Similar data fetched."
-                log_data[7] = similarity_result
+                log_data[8] = similarity_result
             else:
                 response = "Data fetched from database."
                 log_data[7] = query_result
@@ -92,7 +95,7 @@ def chat_benchmark(user_input, chat_history):
         response = "Sorry, I cannot process this request."
         chat_history.append((user_input, response))
 
-    log_data[8] = response
+    log_data[9] = response
     chat_history.append((user_input, response))
     return chat_history, response, log_data
 
@@ -113,6 +116,7 @@ def log_to_csv(log_data, file_path=BENCHMARK_RESULTS_FILE):
                     "intent",
                     "query",
                     "query_result",
+                    "similarity_search_result",
                     "response",
                 ]
             )
