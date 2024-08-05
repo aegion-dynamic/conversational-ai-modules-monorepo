@@ -9,7 +9,7 @@ This document outlines the pipeline structure for creating a knowledge graph in 
 
 - **Objective**: Prepare the CSV file for processing.
 - **Input**: CSV file containing citation data with columns such as authors, published date, title, and abstract.
-- **File Path**: `C:\Users\Satwik\Desktop\AegionDynamic\pubmed\pubmed_articles.csv`
+- **File Path**: `~/pubmed_articles.csv`
 - **Tools**: Pandas (for data manipulation and cleaning)
 
 **Tasks**:

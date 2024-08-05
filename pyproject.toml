@@ -34,6 +34,8 @@ langchain-openai = "^0.1.7"
 pandas = "^2.2.2"
 
 langchain = "^0.2.5"
+langchain-groq = "^0.1.9"
+neo4j = "^5.23.1"
 [tool.poetry.group.dev.dependencies]
 flask_testing="0.8.0"
 coverage="^4.0.3"
