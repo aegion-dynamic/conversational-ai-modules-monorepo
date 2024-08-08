@@ -184,6 +184,8 @@ def change_chat_history(user_chat_history: List[Tuple[str, str]]) -> List[Union[
     corrected_chat_history = []
     for sender, message in user_chat_history:
         if sender is memory.bot_id:
+            # Remove user IDs from the message
+            message = remove_user_id(message)
             corrected_chat_history.append(AIMessage(content=message))
         else:
             corrected_chat_history.append(HumanMessage(content=message))
