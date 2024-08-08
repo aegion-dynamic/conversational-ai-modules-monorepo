@@ -105,10 +105,7 @@ def create_bot() -> commands.Bot:
                 # Assume interaction with the user ......
                 # Set the typing state on the channel
                 await message.channel.typing()
-                print(f"Chat History: {chat_history}")
                 queried_data, user_chat_history = main_workflow(user_input, chat_history)
-                print(f"Queried Data: {queried_data}")
-                print(f"User Chat History: {user_chat_history}")
 
                 corrected_chat_history = change_chat_history(user_chat_history)
 
@@ -119,7 +116,6 @@ def create_bot() -> commands.Bot:
                 updated_user_input = "user input: " + user_input + "data retrieved for the user input :" + queried_data
                 print(f"corrected chat history: {corrected_chat_history}")
 
-                print(f"User Input: {user_input}")
                 reply = chatbot_instance.converse(
                     user_input=updated_user_input, previous_messages=corrected_chat_history
                 )

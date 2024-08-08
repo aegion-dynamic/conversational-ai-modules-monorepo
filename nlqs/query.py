@@ -2,6 +2,7 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Dict, List, Tuple
 from xml.dom.minidom import Document
 
@@ -121,7 +122,7 @@ def get_chroma_collections() -> chromadb.Collection:
 
 
 # Initializes the ChatOpenAI LLM model
-llm = ChatOpenAI(temperature=0, model="gpt-4", api_key=SecretStr(OPENAI_API_KEY), max_tokens=1000)
+llm = ChatOpenAI(temperature=0, model="gpt-4-turbo", api_key=SecretStr(OPENAI_API_KEY), max_tokens=1000)
 
 # Default system prompt for the LLM.
 DEFAULT_SYSTEM_PROMPT = (
@@ -334,6 +335,7 @@ def generate_query(
     llm_chain = LLMChain(llm=llm, prompt=prompt_template, verbose=True, memory=memory)
 
     query = llm_chain.run({"chat_history": chat_history, "user_input": user_input}).strip()
+    query = re.sub(r"```sql|```", "", query)
     logger.info(f"Query: {query}")
 
     return query
