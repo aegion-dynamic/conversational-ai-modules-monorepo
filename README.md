@@ -55,6 +55,12 @@ docker run -p 8080:8080 --env-file ../.env  swagger_server
 
 Run the following command to start the discord bot (make sure your in the poetry environment after you run `poetry install`)
 
+## Exporting the Environemtn variables for the backend
+
+```sh
+set -o allexport; source .env; set +o allexport
+```
+
 ```sh
 start-discord-bot
 ```

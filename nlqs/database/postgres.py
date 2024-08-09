@@ -2,7 +2,6 @@ import logging
 import re
 import psycopg2
 from psycopg2 import sql
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd

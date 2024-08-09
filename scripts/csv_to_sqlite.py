@@ -7,11 +7,7 @@ import sqlite3
 
 import pandas as pd
 
-from discord_bot.parameters import (
-    PRODUCT_DESCRIPTIONS_CSV,
-    SQL_TABLE_NAME,
-    SQLITE_DB_FILE,
-)
+from nlqs.parameters import connection_config, driver, PRODUCT_DESCRIPTIONS_CSV
 
 def convert_csv_to_sqlite():
     try:
@@ -24,12 +20,12 @@ def convert_csv_to_sqlite():
             df = pd.read_csv(PRODUCT_DESCRIPTIONS_CSV, encoding="ISO-8859-1")
 
         # Connect to the SQLite database
-        conn = sqlite3.connect(SQLITE_DB_FILE)
+        conn = sqlite3.connect(connection_config.db_file)
 
         # Write the DataFrame to a SQLite table
-        df.to_sql(SQL_TABLE_NAME, conn, if_exists="replace", index=False)
+        df.to_sql(connection_config.dataset_table_name, conn, if_exists="replace", index=False)
 
-        print(f"Data written to {SQLITE_DB_FILE}")
+        print(f"Data written to {connection_config.dataset_table_name} in {connection_config.db_file}")
 
         # Commit the changes
         conn.commit()

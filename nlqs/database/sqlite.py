@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from nlqs.database.driver import AbstractDriver
+from nlqs.database.abstract_driver import AbstractDriver
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -24,14 +24,13 @@ class SQLiteConnectionConfig:
 
 class SQLiteDriver(AbstractDriver):
     def __init__(self, sqlite_config: SQLiteConnectionConfig):
-        self.db_file = sqlite_config.db_file
-        self.dataset_db_table = sqlite_config.dataset_table_name
+        self.db_config = sqlite_config
         self.db_connection = None
         self.cursor = None
 
     def connect(self):
         try:
-            self.db_connection = sqlite3.connect(self.db_file)
+            self.db_connection = sqlite3.connect(self.db_config.db_file)
             self.cursor = self.db_connection.cursor()
             logger.info("Connected to SQLite database.")
         except sqlite3.Error as e:

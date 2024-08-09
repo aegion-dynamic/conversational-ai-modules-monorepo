@@ -38,3 +38,4 @@ driver.connect()
 
 data_fetched = driver.fetch_data_from_database(connection_config.dataset_table_name)
 
+PRODUCT_DESCRIPTIONS_CSV = "./product_descriptions.csv"
