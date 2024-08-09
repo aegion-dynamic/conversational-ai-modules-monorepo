@@ -6,20 +6,23 @@ import csv
 import os
 import re
 
-from discord_bot.parameters import SQLITE_DB_FILE
-from nlqs.database.sqlite import SQLiteDriver
-from nlqs.query import generate_query, get_chroma_collections, similarity_search, summarize
+import chromadb
+from langchain_openai import ChatOpenAI
+from pydantic import SecretStr
 
-config = {"db_file": SQLITE_DB_FILE}
-driver = SQLiteDriver(config)
-driver.connect()
+from nlqs.database.sqlite import SQLiteDriver
+from nlqs.parameters import OPENAI_API_KEY, chroma_config
+from nlqs.query import generate_query, get_chroma_collection, similarity_search, summarize
+from nlqs.parameters import connection_config, driver
 
 # CSV file paths
 TEST_CASES_FILE = "./test_cases.csv"
 BENCHMARK_RESULTS_FILE = "benchmark_results.csv"
 
-data_vectors = get_chroma_collections()
+chroma_client  = chromadb.PersistentClient()
+chroma_collection = get_chroma_collection(chroma_client, chroma_config.collection_name, driver, connection_config.dataset_table_name)
 
+llm = ChatOpenAI(temperature=0, model="gpt-4-turbo", api_key=SecretStr(OPENAI_API_KEY), max_tokens=1000) # type: ignore
 
 # Main chat function
 def chat_benchmark(user_input, chat_history):
@@ -29,11 +32,11 @@ def chat_benchmark(user_input, chat_history):
     column_descriptions, numerical_columns, categorical_columns = driver.retrieve_descriptions_and_types_from_db()
 
     user_input = re.sub(r"{|}", "", user_input)
-    summarized_input = summarize(user_input, chat_history, column_descriptions, numerical_columns, categorical_columns)
+    summarized_input = summarize(user_input, chat_history, column_descriptions, numerical_columns, categorical_columns, llm)
 
     if not summarized_input:
         summarized_input = summarize(
-            user_input, chat_history, column_descriptions, numerical_columns, categorical_columns
+            user_input, chat_history, column_descriptions, numerical_columns, categorical_columns,llm
         )
 
     if not summarized_input:
@@ -74,14 +77,14 @@ def chat_benchmark(user_input, chat_history):
 
     if summarized_input.user_requested_columns:
         genenerted_query = generate_query(
-            user_input, summarized_input, chat_history, column_descriptions, numerical_columns, categorical_columns
+            user_input, summarized_input, chat_history, column_descriptions, numerical_columns, categorical_columns,llm,connection_config.dataset_table_name
         )
         if driver.validate_query(genenerted_query):
             query_result = driver.execute_query(genenerted_query)
             log_data[6] = genenerted_query
 
             if query_result == "No results found.":
-                similarity_result = similarity_search(data_vectors, user_input)
+                similarity_result = similarity_search(chroma_collection, user_input=user_input)
                 response = "Similar data fetched."
                 log_data[8] = similarity_result
             else:

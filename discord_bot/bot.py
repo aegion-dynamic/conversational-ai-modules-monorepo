@@ -1,3 +1,4 @@
+from pathlib import Path
 import random
 import re
 from typing import Any, List, Optional, Tuple, Union
@@ -5,7 +6,7 @@ from typing import Any, List, Optional, Tuple, Union
 import discord
 from discord.ext import commands
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from openai import chat
+from nlqs.parameters import chroma_config, connection_config
 
 import discord_bot.memory as memory
 from chatbot.conversation import Chatbot
@@ -18,7 +19,7 @@ from discord_bot.memory import (
     set_user_inactive,
 )
 from discord_bot.state import BotState, empty_active_users, new_user, user_exists
-from nlqs.workflow import main_workflow
+from nlqs.nlqs import NLQS
 
 # Global variable to store the state of the bot
 global_state = BotState.IDLE
@@ -105,7 +106,9 @@ def create_bot() -> commands.Bot:
                 # Assume interaction with the user ......
                 # Set the typing state on the channel
                 await message.channel.typing()
-                queried_data, user_chat_history = main_workflow(user_input, chat_history)
+
+                nlqs_instance = NLQS(connection_config, chroma_config)
+                queried_data, user_chat_history = nlqs_instance.execute_nlqs_workflow(user_input, chat_history)
 
                 corrected_chat_history = change_chat_history(user_chat_history)
 

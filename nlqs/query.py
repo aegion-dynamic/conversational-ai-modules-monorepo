@@ -1,51 +1,22 @@
 import json
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 import re
-from typing import Dict, List, Tuple
-from xml.dom.minidom import Document
+from typing import Dict, List, Tuple, Union
 
-import chromadb
 from langchain.chains import LLMChain
 from langchain.memory import ConversationBufferMemory
-from langchain_community.document_loaders.csv_loader import CSVLoader
-from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from pandas import DataFrame
-from pydantic.v1 import SecretStr
-
-from discord_bot.parameters import (
-    CHROMA_COLLECTION_NAME,
-    LOGGER_FILE,
-    OPENAI_API_KEY,
-    SQL_TABLE_NAME,
-    SQLITE_DB_FILE,
-)
 from nlqs.database.sqlite import SQLiteDriver
-config = {"db_file": SQLITE_DB_FILE}
-driver = SQLiteDriver(config)
-driver.connect()
+from nlqs.database.postgres import PostgresDriver
 
+import chromadb
 
 # Create a logger object
 logger = logging.getLogger(__name__)
 
 # Set the logging level (e.g., DEBUG, INFO, WARNING, ERROR)
 logger.setLevel(logging.INFO)
-
-# Create a file handler to save logs
-file_handler = logging.FileHandler(LOGGER_FILE)
-
-# Create a formatter to format the log messages
-formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-
-# Add the formatter to the file handler
-file_handler.setFormatter(formatter)
-
-# Add the file handler to the logger
-logger.addHandler(file_handler)
 
 
 @dataclass
@@ -65,26 +36,35 @@ class SummarizedInput:
 #         self.column_descriptions, self.numerical_columns, self.categorical_columns = retrieve_descriptions_and_types_from_db()
 
 
-def get_chroma_collections() -> chromadb.Collection:
+def get_chroma_collection(
+        chroma_client,
+        collection_name: str, 
+        db_driver: Union[SQLiteDriver, PostgresDriver], 
+        dataset_table_name: str
+    ) -> chromadb.Collection:
     """Gets the chroma collection.
 
     Returns:
         Chroma: Chroma collection.
     """
-    chroma_client  = chromadb.PersistentClient()
-    collection_name = CHROMA_COLLECTION_NAME
+   
     collections = [col.name for col in chroma_client.list_collections()]
-    print(collections)
 
     if collection_name in collections:
         print(f"Collection '{collection_name}' already exists, getting existing collection...")
         chroma_collection = chroma_client.get_collection(collection_name)
     else:
-        print("Creating new collection...")
+        print(f"Collection '{collection_name}' does not exists, Creating new collection...")
         collection = chroma_client.create_collection(collection_name)
 
-        data: DataFrame = driver.fetch_data_from_sqlite(SQL_TABLE_NAME)
+        data = db_driver.fetch_data_from_database(dataset_table_name)
 
+        if data is None:
+            raise ValueError("No data found in the database.")
+
+        # TODO - Modify this project specific stuff to work with the data driver
+
+        # TODO - Get column names from the database
         data["combined_text"] = data[
             ["Product", "Category", "PackageID", "MedicalBenefitsReported", "Description"]
         ].apply(lambda x: " ".join(x.dropna().astype(str)), axis=1)
@@ -121,9 +101,6 @@ def get_chroma_collections() -> chromadb.Collection:
     return chroma_collection
 
 
-# Initializes the ChatOpenAI LLM model
-llm = ChatOpenAI(temperature=0, model="gpt-4-turbo", api_key=SecretStr(OPENAI_API_KEY), max_tokens=1000)
-
 # Default system prompt for the LLM.
 DEFAULT_SYSTEM_PROMPT = (
     "You are a professional medical assistant, adept at handling inquiries related to medical products."
@@ -153,6 +130,7 @@ def summarize(
     column_descriptions_dictionary: Dict[str, str],
     numerical_columns: List[str],
     categorical_columns: List[str],
+    llm, 
 ) -> SummarizedInput:
     """Summarizes the user input and returns the summary, quantitative data, and qualitative data, along with the user requested columns in a JSON format.
 
@@ -284,6 +262,8 @@ def generate_query(
     column_descriptions: Dict[str, str],
     numerical_columns: List[str],
     categorical_columns: List[str],
+    llm,
+    dataset_table_name: str
 ) -> str:
     """Generates an SQL query based on the user input and chat history.
 
@@ -315,7 +295,7 @@ def generate_query(
     numerical columns in the data: {numerical_columns}\n\n 
     descriptive columns in the data: {categorical_columns}\n\n 
     The columns in the database were {', '.join(column_descriptions.keys())}\n\n
-    Table name: {SQL_TABLE_NAME}\n\n
+    Table name: {dataset_table_name}\n\n
     User input: {user_input}\n\n
     quantitative data in the user input: {quantitative_data}\n\n
     qualitative data in the user input: {qualitative_data}\n\n

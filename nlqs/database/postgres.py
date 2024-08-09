@@ -7,8 +7,9 @@ from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from discord_bot.parameters import LOGGER_FILE, POSTGRES_DB_CONFIG
-from nlqs.database.driver import AbstractDriver
+from nlqs.database.abstract_driver import AbstractDriver
+
+from dataclasses import dataclass
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -16,37 +17,40 @@ logger = logging.getLogger(__name__)
 # Set the logging level (e.g., DEBUG, INFO, WARNING, ERROR)
 logger.setLevel(logging.INFO)
 
-# Create a file handler to save logs
-file_handler = logging.FileHandler(LOGGER_FILE)
-
-# Create a formatter to format the log messages
-formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-
-# Add the formatter to the file handler
-file_handler.setFormatter(formatter)
-
-# Add the file handler to the logger
-logger.addHandler(file_handler)
+@dataclass
+class PostgresConnectionConfig:
+    host: str
+    port: int
+    user: str
+    password: str
+    database_name: str
+    dataset_table_name: str
 
 
 class PostgresDriver(AbstractDriver):
-    def __init__(self, config: Dict):
-        self.db_config = config.get("db_config", POSTGRES_DB_CONFIG)
-        self.conn = None
+    def __init__(self, pg_config: PostgresConnectionConfig):
+        self.db_config = pg_config
+        self.db_connection = None
         self.cursor = None
 
     def connect(self):
         try:
-            self.conn = psycopg2.connect(**self.db_config)
-            self.cursor = self.conn.cursor()
+            self.db_connection = psycopg2.connect(
+                dbname=self.db_config.database_name, 
+                user=self.db_config.user, 
+                password=self.db_config.password, 
+                host=self.db_config.host, 
+                port=self.db_config.port
+            )            
+            self.cursor = self.db_connection.cursor()
             logger.info("Connected to PostgreSQL database.")
         except psycopg2.Error as e:
             logger.error(f"Error connecting to database: {e}")
             raise
 
     def disconnect(self):
-        if self.conn:
-            self.conn.close()
+        if self.db_connection:
+            self.db_connection.close()
             logger.info("Disconnected from PostgreSQL database.")
 
     def execute_query(self, query: str) -> str:
@@ -61,7 +65,7 @@ class PostgresDriver(AbstractDriver):
         try:
             self.cursor.execute(query)
             result = self.cursor.fetchall()
-            self.conn.commit()
+            self.db_connection.commit()
             result_str = str(result)
             logger.info(f"Query executed successfully: {result_str}")
             return result_str if result else "No results found."
@@ -135,8 +139,8 @@ class PostgresDriver(AbstractDriver):
             logger.error(f"Error validating query: {e}")
             return False
 
-    @staticmethod
-    def fetch_data_from_sqlite(db_file: Path, table_name: str) -> Optional[pd.DataFrame]:
+
+    def fetch_data_from_database(self, table_name: str) -> pd.DataFrame:
         """Fetch data from a PostgreSQL database table.
 
         Args:
@@ -144,14 +148,17 @@ class PostgresDriver(AbstractDriver):
             table_name (str): Name of the table to fetch data from.
 
         Returns:
-            Optional[pd.DataFrame]: A DataFrame containing the data from the table, or None if an error occurred.
+            pd.DataFrame: A DataFrame containing the data from the table, or None if an error occurred.
         """
         try:
-            conn = psycopg2.connect(**POSTGRES_DB_CONFIG)
-            query = sql.SQL("SELECT * FROM {}").format(sql.Identifier(table_name))
-            df = pd.read_sql_query(query.as_string(conn), conn)
+            conn = self.db_connection
+            query = f"SELECT * FROM {table_name}"
+            if conn is None:
+                raise ValueError("Database connection not established.")
+            df = pd.read_sql_query(query, conn)
             conn.close()
-            return df
         except psycopg2.Error as e:
             logger.error(f"Error fetching data: {e}")
-            return None
+            return pd.DataFrame()  # Return an empty DataFrame on error
+            
+        return df
