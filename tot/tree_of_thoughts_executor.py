@@ -1,18 +1,17 @@
 import logging
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
-from sample_data_manager import SampleDataManager
 from intent_classifier import IntentClassifier
 from thought_generator import ThoughtGenerator
 from state_evaluator import StateEvaluator
 from tree_of_thoughts import TreeOfThoughts
 
 @dataclass
-class DataInputs:
+class ToTExecutorInputs:
     """
     Data class to hold input parameters for TreeOfThoughtsExecutor.
     """
-    api_key: Optional[str] = None
+    api_key: str
     user_query: Optional[str] = None
     sample_csv_data: Optional[str] = None
     num_thoughts: Optional[int] = None
@@ -31,7 +30,7 @@ class TreeOfThoughtsExecutor:
     using the provided input parameters.
     """
 
-    def __init__(self, data_inputs: DataInputs):
+    def __init__(self, data_inputs: ToTExecutorInputs):
         """
         Initialize the TreeOfThoughtsExecutor.
 
@@ -41,29 +40,18 @@ class TreeOfThoughtsExecutor:
         Raises:
             ValueError: If required inputs are missing.
         """
-        if not data_inputs:
-            raise ValueError("DataInputs instance must be provided")
         if not data_inputs.json_output_prompt:
             raise ValueError("JSON output prompt must be provided")
         if not data_inputs.classification_prompt:
             raise ValueError("Classification prompt must be provided")
 
-        self.data_inputs = data_inputs
+        self.data_inputs: ToTExecutorInputs = data_inputs
         self.tree_of_thoughts = TreeOfThoughts(
-            api_key=self.data_inputs.api_key,
-            sample_data_manager=SampleDataManager(self.data_inputs.sample_csv_data),
-            intent_classifier=IntentClassifier(
-                api_key=self.data_inputs.api_key,
-                classification_prompt=self.data_inputs.classification_prompt
-            ),
-            thought_generator=ThoughtGenerator(
-                api_key=self.data_inputs.api_key,
-                thought_generation_prompt=self.data_inputs.thought_generation_prompt
-            ),
-            state_evaluator=StateEvaluator(
-                api_key=self.data_inputs.api_key,
-                evaluation_prompt=self.data_inputs.evaluation_prompt
-            ),
+            api_key=data_inputs.api_key,
+            sample_data=data_inputs.sample_csv_data if data_inputs.sample_csv_data else None,
+            classification_prompt=data_inputs.classification_prompt,
+            thought_generation_prompt=data_inputs.thought_generation_prompt,
+            state_evaluation_prompt=data_inputs.evaluation_prompt,
             json_output_prompt=self.data_inputs.json_output_prompt
         )
     

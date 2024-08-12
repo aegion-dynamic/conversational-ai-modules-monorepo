@@ -45,9 +45,5 @@ class SampleDataManager:
         Returns:
             str: JSON formatted string of the sample data.
         """
-        try:
-            # Convert the sample data to a JSON string with indentation
-            return json.dumps(self.sample_data, indent=2)
-        except json.JSONEncodeError as e:
-            print(f"Error encoding sample data to JSON: {e}")
-            return "[]"
+        # Convert the sample data to a JSON string with indentation
+        return json.dumps(self.sample_data, indent=2)

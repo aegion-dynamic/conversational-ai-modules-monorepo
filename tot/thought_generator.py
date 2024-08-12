@@ -6,7 +6,7 @@ class ThoughtGenerator:
     Generates thoughts for problem-solving using OpenAI's GPT model.
     """
 
-    def __init__(self, api_key: str, thought_generation_prompt: str = None):
+    def __init__(self, api_key: str, thought_generation_prompt: str):
         """
         Initialize the ThoughtGenerator.
 
@@ -55,7 +55,7 @@ class ThoughtGenerator:
         
         try:
             # Call OpenAI API for thought generation
-            response = openai.ChatCompletion.create(
+            response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=messages,
                 max_tokens=100,

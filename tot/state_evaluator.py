@@ -6,7 +6,7 @@ class StateEvaluator:
     Evaluates problem-solving states using OpenAI's GPT model.
     """
 
-    def __init__(self, api_key: str, evaluation_prompt: str = None):
+    def __init__(self, api_key: str, evaluation_prompt: str, number_of_iterations: int = 3):
         """
         Initialize the StateEvaluator.
 
@@ -16,6 +16,7 @@ class StateEvaluator:
         """
         self.api_key = api_key
         openai.api_key = self.api_key
+        self.number_of_iterations = number_of_iterations
         
         # Default evaluation prompt if not provided
         self.evaluation_prompt = evaluation_prompt or """
@@ -48,7 +49,7 @@ class StateEvaluator:
         
         try:
             # Call OpenAI API for state evaluation
-            response = openai.ChatCompletion.create(
+            response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=messages,
                 max_tokens=100,

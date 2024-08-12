@@ -1,7 +1,7 @@
 import openai
 import json
 import logging
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Optional, Tuple
 from sample_data_manager import SampleDataManager
 from intent_classifier import IntentClassifier
 from thought_generator import ThoughtGenerator
@@ -15,9 +15,15 @@ class TreeOfThoughts:
     and final output generation based on user input and sample data.
     """
 
-    def __init__(self, api_key: str, sample_data_manager: SampleDataManager, 
-                 intent_classifier: IntentClassifier, thought_generator: ThoughtGenerator, 
-                 state_evaluator: StateEvaluator, json_output_prompt: str = None):
+    def __init__(
+        self, 
+        api_key: str, 
+        sample_data: Optional[str], 
+        classification_prompt: str, 
+        thought_generation_prompt: Optional[str] = None, 
+        state_evaluation_prompt: Optional[str] = None, 
+        json_output_prompt: Optional[str] = None
+    ):
         """
         Initialize the TreeOfThoughts instance.
 
@@ -29,21 +35,54 @@ class TreeOfThoughts:
             state_evaluator (StateEvaluator): Instance for evaluating states.
             json_output_prompt (str, optional): Custom prompt for JSON output generation.
         """
-        if not api_key or not sample_data_manager or not intent_classifier or not thought_generator or not state_evaluator:
+        if not api_key or not sample_data or not classification_prompt or not thought_generation_prompt or not state_evaluation_prompt:
             raise ValueError("API key and all component instances must be provided")
 
-        self.api_key = api_key
-        openai.api_key = self.api_key
-        self.sample_data_manager = sample_data_manager
-        self.intent_classifier = intent_classifier
-        self.thought_generator = thought_generator
-        self.state_evaluator = state_evaluator
-        self.logger = logging.getLogger(__name__)
+        
+        openai.api_key = api_key
+
+        if sample_data:
+            self.sample_data_manager = SampleDataManager(sample_data)
+        self.intent_classifier = IntentClassifier(
+            api_key=api_key,
+            classification_prompt=classification_prompt,
+        )
+
+        if thought_generation_prompt:
+            thought_generation_prompt = "TODO: Implement default thought generation prompt"
+            raise NotImplementedError("Default thought generation prompt not implemented")
+        
+        self.thought_generator: ThoughtGenerator = ThoughtGenerator(
+            api_key=api_key,
+            thought_generation_prompt=thought_generation_prompt
+        )
+
+        if state_evaluation_prompt:
+            state_evaluation_prompt = "TODO: Implement default state evaluation prompt"
+            raise NotImplementedError("Default state evaluation prompt not implemented")
+        
+        self.state_evaluator: StateEvaluator = StateEvaluator(
+            api_key=api_key,
+            evaluation_prompt=state_evaluation_prompt
+        )
+        
+        if not json_output_prompt:
+            json_output_prompt = "TODO: Implement default JSON output prompt"
+            raise NotImplementedError("Default JSON output prompt not implemented")
         
         self.json_output_prompt = json_output_prompt
+        
+        self.logger = logging.getLogger(__name__)
 
-    def solve(self, user_input: str, chat_history: List[str], num_thoughts: int = 3, 
-              max_steps: int = 3, best_states_count: int = 2) -> Dict[str, Any]:
+
+    def solve(
+        self, 
+        user_input: str, 
+        chat_history: List[str], 
+        num_thoughts: int = 3, 
+        max_steps: int = 3, 
+        best_states_count: int = 2
+    ) -> Dict[str, Any]:
         """
         Processes the user input, analyzes the intent, and performs a tree search to generate the output.
 
@@ -91,8 +130,13 @@ class TreeOfThoughts:
         self.logger.info("Tree search completed")
         return self._generate_json_output(best_state, thought_path)
 
-    def _tree_search(self, initial_state: str, num_thoughts: int, max_steps: int, 
-                     best_states_count: int) -> Tuple[str, List[str]]:
+    def _tree_search(
+        self, 
+        initial_state: str, 
+        num_thoughts: int, 
+        max_steps: int, 
+        best_states_count: int
+    ) -> Tuple[str, List[str]]:
         """
         Performs a tree search to find the best state and thought path.
 
@@ -129,7 +173,11 @@ class TreeOfThoughts:
         self.logger.info("Tree search completed")
         return states[0] if states else (initial_state, [])
 
-    def _generate_json_output(self, final_state: str, thought_path: List[str]) -> Dict[str, Any]:
+    def _generate_json_output(
+        self, 
+        final_state: str, 
+        thought_path: List[str]
+    ) -> Dict[str, Any]:
         """
         Generates the final JSON output based on the best state and thought path.
 
@@ -163,7 +211,7 @@ class TreeOfThoughts:
 
         try:
             self.logger.info("Sending request to OpenAI API")
-            response = openai.ChatCompletion.create(
+            response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=messages,
                 max_tokens=1000,

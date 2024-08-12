@@ -5,7 +5,7 @@ class IntentClassifier:
     A class for classifying user intent using OpenAI's GPT model.
     """
 
-    def __init__(self, api_key: str, classification_prompt: str = None):
+    def __init__(self, api_key: str, classification_prompt: str):
         """
         Initialize the IntentClassifier.
 
@@ -61,7 +61,7 @@ class IntentClassifier:
 
         try:
             # Call OpenAI API for intent classification
-            response = openai.ChatCompletion.create(
+            response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=messages,
                 max_tokens=1,
