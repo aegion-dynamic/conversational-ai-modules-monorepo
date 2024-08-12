@@ -6,6 +6,9 @@ from sample_data_manager import SampleDataManager
 from intent_classifier import IntentClassifier
 from thought_generator import ThoughtGenerator
 from state_evaluator import StateEvaluator
+from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
+from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
+
 
 class TreeOfThoughts:
     """
@@ -205,41 +208,43 @@ class TreeOfThoughts:
         )
 
         messages = [
-            {"role": "system", "content": "You are a helpful assistant generating detailed JSON output based on analysis results."},
-            {"role": "user", "content": prompt}
+            ChatCompletionSystemMessageParam(role= "system", content= "You are a helpful assistant generating detailed JSON output based on analysis results."),
+            ChatCompletionUserMessageParam(role="user", content= prompt)
         ]
 
+        self.logger.info("Sending request to OpenAI API")
+        response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            max_tokens=1000,
+            n=1,
+            temperature=0.2
+        )
+        self.logger.info("Received response from OpenAI API")
+
+        # Process and clean the JSON string
+        content = response.choices[0].message.content
+        if content is None:
+            raise ValueError("No content received in response to the openai completion request")
+
+        json_string = content.strip()
+        
+        if json_string.startswith('```json'):
+            json_string = json_string[7:]
+        if json_string.endswith('```'):
+            json_string = json_string[:-3]
+        json_string = json_string.strip()
+
         try:
-            self.logger.info("Sending request to OpenAI API")
-            response = openai.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=messages,
-                max_tokens=1000,
-                n=1,
-                temperature=0.2
-            )
-            self.logger.info("Received response from OpenAI API")
-
-            # Process and clean the JSON string
-            json_string = response.choices[0].message['content'].strip()
-            if json_string.startswith('```json'):
-                json_string = json_string[7:]
-            if json_string.endswith('```'):
-                json_string = json_string[:-3]
-            json_string = json_string.strip()
-
             json_output = json.loads(json_string)
-            
-            # Ensure 'user_requested_columns' is present in the output
-            if 'user_requested_columns' not in json_output or not json_output['user_requested_columns']:
-                json_output['user_requested_columns'] = []
-
-            self.logger.info("JSON output generated successfully")
-            return json_output
         except json.JSONDecodeError as e:
             self.logger.error(f"Error decoding JSON: {e}")
-            self.logger.error(f"Response text: {response.choices[0].message['content']}")
-            return {"error": "Failed to generate valid JSON output"}
-        except Exception as e:
-            self.logger.error(f"Error in generating JSON output: {e}")
-            return {"error": f"An error occurred: {str(e)}"}
+            self.logger.error(f"Response text: {json_string}")
+            raise json.JSONDecodeError(msg="Error decoding JSON response from OpenAI", doc=e.doc, pos=e.pos)
+    
+        # Ensure 'user_requested_columns' is present in the output
+        if 'user_requested_columns' not in json_output or not json_output['user_requested_columns']:
+            json_output['user_requested_columns'] = []
+
+        self.logger.info("JSON output generated successfully")
+        return json_output

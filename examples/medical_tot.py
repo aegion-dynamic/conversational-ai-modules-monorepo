@@ -1,8 +1,9 @@
 import logging
 import json
 import os
+from typing import LiteralString
 from dotenv import load_dotenv
-from tree_of_thoughts_executor import TreeOfThoughtsExecutor, DataInputs
+from tot.tree_of_thoughts_executor import TreeOfThoughtsExecutor, ToTExecutorInputs
 
 # Setup basic logging configuration
 logging.basicConfig(level=logging.INFO)
@@ -10,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 # Load environment variables from a .env file
 load_dotenv()
 
-def get_json_output_prompt():
+def get_json_output_prompt() -> LiteralString:
     """
     Provide the JSON output prompt for the Tree of Thoughts process.
 
@@ -50,7 +51,7 @@ def get_json_output_prompt():
     The columns present in our database are: "Location,Room,Product,Category,PackageID,Batch,CBD,THC,CBDA,CBG,CBN,THCA,CustomerRating,MedicalBenefitsReported,RepeatPurchaseFrequency,URL,Description"
     """
 
-def get_classification_prompt():
+def get_classification_prompt() -> LiteralString:
     """
     Provide the classification prompt for intent classification.
 
@@ -91,9 +92,8 @@ Los Angeles,Bedroom,THC Gummies,Edibles,PKG002,B002,0,100,0,0,0,0,4.8,Relaxation
     try:
         # Initialize the TreeOfThoughtsExecutor with sample data, API key, and prompts
         executor = TreeOfThoughtsExecutor(
-            DataInputs(
+            ToTExecutorInputs(
                 api_key=api_key,
-                user_query=user_query,
                 sample_csv_data=sample_csv_data,
                 num_thoughts=3,
                 num_iterations=3,
@@ -104,7 +104,7 @@ Los Angeles,Bedroom,THC Gummies,Edibles,PKG002,B002,0,100,0,0,0,0,4.8,Relaxation
         )
         
         # Execute the problem-solving process
-        output = executor.execute()
+        output = executor.execute(user_query=user_query)
         
         # Print the result in a formatted JSON structure
         print(json.dumps(output, indent=2))

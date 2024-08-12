@@ -1,5 +1,7 @@
 import openai
 from typing import List
+from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
+from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
 
 class ThoughtGenerator:
     """
@@ -49,24 +51,24 @@ class ThoughtGenerator:
         )
         
         messages = [
-            {"role": "system", "content": "You are a helpful assistant generating thoughts for problem-solving."},
-            {"role": "user", "content": prompt}
+            ChatCompletionSystemMessageParam(role= "system", content= "You are a helpful assistant generating thoughts for problem-solving."),
+            ChatCompletionUserMessageParam(role="user", content= prompt)
         ]
         
-        try:
-            # Call OpenAI API for thought generation
-            response = openai.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=messages,
-                max_tokens=100,
-                n=1,
-                temperature=0.7
-            )
+        # Call OpenAI API for thought generation
+        response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            max_tokens=100,
+            n=1,
+            temperature=0.7
+        )
 
-            # Extract and process thoughts from the response
-            thoughts_text = response.choices[0].message['content'].strip()
+        # Extract and process thoughts from the response
+        thoughts_text = response.choices[0].message.content #['content'].strip()
+        if thoughts_text is not None:
+            thoughts_text = thoughts_text.strip()
             thoughts = [thought.split('. ', 1)[1] for thought in thoughts_text.split('\n') if '. ' in thought]
             return thoughts[:num_thoughts]  # Ensure we return exactly num_thoughts thoughts
-        except Exception as e:
-            print(f"Error in thought generation: {e}")
-            return [f"Error in thought generation: {e}"] * num_thoughts
+        else:
+            raise Exception("No thoughts generated.")

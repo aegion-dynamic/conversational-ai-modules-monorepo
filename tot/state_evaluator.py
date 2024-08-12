@@ -1,5 +1,8 @@
 import openai
 from typing import List
+from openai.types.chat.chat_completion import ChatCompletion
+from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
+from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
 
 class StateEvaluator:
     """
@@ -15,7 +18,6 @@ class StateEvaluator:
             evaluation_prompt (str, optional): Custom prompt for state evaluation.
         """
         self.api_key = api_key
-        openai.api_key = self.api_key
         self.number_of_iterations = number_of_iterations
         
         # Default evaluation prompt if not provided
@@ -43,28 +45,28 @@ class StateEvaluator:
         prompt = self.evaluation_prompt.format(states_text=states_text)
         
         messages = [
-            {"role": "system", "content": "You are a helpful assistant evaluating problem-solving states."},
-            {"role": "user", "content": prompt}
+            ChatCompletionSystemMessageParam(role= "system", content= "You are a helpful assistant evaluating problem-solving states."),
+            ChatCompletionUserMessageParam(role= "user", content= prompt)
         ]
         
-        try:
-            # Call OpenAI API for state evaluation
-            response = openai.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=messages,
-                max_tokens=100,
-                n=1,
-                temperature=0.3
-            )
+        # Call OpenAI API for state evaluation
+        response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            max_tokens=100,
+            n=1,
+            temperature=0.3
+        )
 
-            # Extract and process ratings from the response
-            ratings_text = response.choices[0].message['content'].strip()
-            ratings = [float(rating) for rating in ratings_text.split('\n') if rating.replace('.', '').isdigit()]
-            
-            # Ensure we have a rating for each state
-            if len(ratings) < len(states):
-                ratings.extend([0.0] * (len(states) - len(ratings)))
-            return ratings[:len(states)]
-        except Exception as e:
-            print(f"Error in state evaluation: {e}")
+        # Extract and process ratings from the response
+        ratings_text = response.choices[0].message.content
+        if ratings_text is None:
             return [0.0] * len(states)
+        else:
+            ratings_text = ratings_text.strip()
+            ratings = [float(rating) for rating in ratings_text.split('\n') if rating.replace('.', '').isdigit()]
+        
+        # Ensure we have a rating for each state
+        if len(ratings) < len(states):
+            ratings.extend([0.0] * (len(states) - len(ratings)))
+        return ratings[:len(states)]

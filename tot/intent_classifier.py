@@ -1,5 +1,8 @@
 import openai
 
+from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
+from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
+
 class IntentClassifier:
     """
     A class for classifying user intent using OpenAI's GPT model.
@@ -53,24 +56,24 @@ class IntentClassifier:
         """
         # Format the prompt with the user input
         prompt = self.classification_prompt.format(user_input=user_input)
-
         messages = [
-            {"role": "system", "content": "You are a helpful assistant classifying user intent."},
-            {"role": "user", "content": prompt}
+            ChatCompletionSystemMessageParam(role= "system", content= "You are a helpful assistant classifying user intent."),
+            ChatCompletionUserMessageParam(role= "user", content= prompt)
         ]
 
-        try:
-            # Call OpenAI API for intent classification
-            response = openai.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=messages,
-                max_tokens=1,
-                n=1,
-                temperature=0.3
-            )
+        # Call OpenAI API for intent classification
+        response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            max_tokens=1,
+            n=1,
+            temperature=0.3
+        )
 
-            intent = response.choices[0].message['content'].strip()
+        choice = response.choices[0]
+        message_content = choice.message.content
+        if message_content is not None:
+            intent = message_content.strip()
             return intent
-        except Exception as e:
-            print(f"Error in intent classification: {e}")
-            return "4"  # Default to information request in case of error
+        else:
+            return "4"

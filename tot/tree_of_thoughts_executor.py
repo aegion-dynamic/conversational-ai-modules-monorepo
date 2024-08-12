@@ -1,9 +1,5 @@
-import logging
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
-from intent_classifier import IntentClassifier
-from thought_generator import ThoughtGenerator
-from state_evaluator import StateEvaluator
 from tree_of_thoughts import TreeOfThoughts
 
 @dataclass
@@ -12,7 +8,6 @@ class ToTExecutorInputs:
     Data class to hold input parameters for TreeOfThoughtsExecutor.
     """
     api_key: str
-    user_query: Optional[str] = None
     sample_csv_data: Optional[str] = None
     num_thoughts: Optional[int] = None
     num_iterations: Optional[int] = None
@@ -46,6 +41,10 @@ class TreeOfThoughtsExecutor:
             raise ValueError("Classification prompt must be provided")
 
         self.data_inputs: ToTExecutorInputs = data_inputs
+
+        self.num_thoughts = data_inputs.num_thoughts or 3
+        self.num_iterations = data_inputs.num_iterations or 3
+
         self.tree_of_thoughts = TreeOfThoughts(
             api_key=data_inputs.api_key,
             sample_data=data_inputs.sample_csv_data if data_inputs.sample_csv_data else None,
@@ -55,7 +54,7 @@ class TreeOfThoughtsExecutor:
             json_output_prompt=self.data_inputs.json_output_prompt
         )
     
-    def execute(self) -> Dict[str, Any]:
+    def execute(self, user_query: str) -> Dict[str, Any]:
         """
         Execute the Tree of Thoughts process.
 
@@ -65,13 +64,11 @@ class TreeOfThoughtsExecutor:
         Raises:
             ValueError: If user_query is empty.
         """
-        if not self.data_inputs.user_query:
-            raise ValueError("user_query must not be empty")
 
         return self.tree_of_thoughts.solve(
-            user_input=self.data_inputs.user_query,
+            user_input=user_query,
             chat_history=[],  # Assuming no chat history for this example
-            num_thoughts=self.data_inputs.num_thoughts,
-            max_steps=self.data_inputs.num_iterations,
+            num_thoughts=self.num_thoughts,
+            max_steps=self.num_iterations,
             best_states_count=2  # Adjust as needed
         )
