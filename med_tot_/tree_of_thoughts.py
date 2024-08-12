@@ -11,30 +11,23 @@ class TreeOfThoughts:
     """
     A class to implement the Tree of Thoughts methodology for processing user input and generating analysis.
 
-    Attributes:
-        api_key (str): API key for OpenAI services.
-        sample_data_manager (SampleDataManager): An instance of SampleDataManager for handling sample data.
-        intent_classifier (IntentClassifier): An instance of IntentClassifier for classifying user intents.
-        thought_generator (ThoughtGenerator): An instance of ThoughtGenerator for generating thoughts.
-        state_evaluator (StateEvaluator): An instance of StateEvaluator for evaluating states.
-        logger (logging.Logger): Logger for capturing and recording logs.
+    This class orchestrates the process of intent classification, thought generation, state evaluation,
+    and final output generation based on user input and sample data.
     """
 
     def __init__(self, api_key: str, sample_data_manager: SampleDataManager, 
                  intent_classifier: IntentClassifier, thought_generator: ThoughtGenerator, 
-                 state_evaluator: StateEvaluator):
+                 state_evaluator: StateEvaluator, json_output_prompt: str = None):
         """
-        Initializes the TreeOfThoughts class with the provided API key and instances of supporting components.
+        Initialize the TreeOfThoughts instance.
 
         Args:
             api_key (str): API key for OpenAI services.
-            sample_data_manager (SampleDataManager): An instance of SampleDataManager for handling sample data.
-            intent_classifier (IntentClassifier): An instance of IntentClassifier for classifying user intents.
-            thought_generator (ThoughtGenerator): An instance of ThoughtGenerator for generating thoughts.
-            state_evaluator (StateEvaluator): An instance of StateEvaluator for evaluating states.
-
-        Raises:
-            ValueError: If any of the required parameters are not provided.
+            sample_data_manager (SampleDataManager): Instance for handling sample data.
+            intent_classifier (IntentClassifier): Instance for classifying user intents.
+            thought_generator (ThoughtGenerator): Instance for generating thoughts.
+            state_evaluator (StateEvaluator): Instance for evaluating states.
+            json_output_prompt (str, optional): Custom prompt for JSON output generation.
         """
         if not api_key or not sample_data_manager or not intent_classifier or not thought_generator or not state_evaluator:
             raise ValueError("API key and all component instances must be provided")
@@ -46,6 +39,8 @@ class TreeOfThoughts:
         self.thought_generator = thought_generator
         self.state_evaluator = state_evaluator
         self.logger = logging.getLogger(__name__)
+        
+        self.json_output_prompt = json_output_prompt
 
     def solve(self, user_input: str, chat_history: List[str], num_thoughts: int = 3, 
               max_steps: int = 3, best_states_count: int = 2) -> Dict[str, Any]:
@@ -73,6 +68,7 @@ class TreeOfThoughts:
         intent = self.intent_classifier.classify_intent(user_input)
         self.logger.info(f"Classified intent: {intent}")
 
+        # Handle special intents
         if intent in ['1', '2', '3', '5']:
             error_messages = {
                 '1': "The user has made a phatic communication.",
@@ -124,6 +120,7 @@ class TreeOfThoughts:
                 self.logger.warning("No new states generated. Breaking tree search.")
                 break
 
+            # Evaluate and select best states
             values = self.state_evaluator.evaluate_states([state for state, _ in new_states])
             states = sorted(zip(new_states, values), key=lambda x: x[1], reverse=True)[:best_states_count]
             states = [state for state, _ in states]
@@ -134,14 +131,14 @@ class TreeOfThoughts:
 
     def _generate_json_output(self, final_state: str, thought_path: List[str]) -> Dict[str, Any]:
         """
-        Generates a JSON output based on the final state, thought path, and sample data using OpenAI's API.
+        Generates the final JSON output based on the best state and thought path.
 
         Args:
-            final_state (str): The final state after tree search.
-            thought_path (List[str]): The path of thoughts leading to the final state.
+            final_state (str): The best state found by the tree search.
+            thought_path (List[str]): The path of thoughts leading to the best state.
 
         Returns:
-            Dict[str, Any]: The generated JSON output.
+            Dict[str, Any]: A dictionary containing the generated output.
         """
         self.logger.info("Generating JSON output")
         sample_data = self.sample_data_manager.get_sample_data()
@@ -149,45 +146,18 @@ class TreeOfThoughts:
         # Extract user query from final state
         user_query = final_state.split('\n')[0].replace('User Input: ', '')
 
-        prompt = f"""
-        Based on the following user query, final state, thought path, and sample data:
+        if not self.json_output_prompt:
+            raise ValueError("JSON output prompt is not provided")
 
-        User Query: {user_query}
-        Final State: {final_state}
-        Thought Path: {thought_path}
-
-        Sample Data:
-        {sample_data}
-
-        Generate a JSON object with the following structure:
-        {{
-            "summary": "A detailed summary of the user input and analysis, focusing on qualitative aspects",
-            "quantitative_data": {{
-                "column name": "relevant numerical data from the analysis",
-                ...
-            }},
-            "qualitative_data": {{
-                "column name": "detailed qualitative information related to the query",
-                ...
-            }},
-            "user_requested_columns": ["List of columns the user explicitly or implicitly requested"],
-            "intent": "information_request",
-        }}
-
-        Guidelines for generating the response:
-        1. Focus primarily on extracting and presenting qualitative data that's most relevant to the user's query.
-        2. Include detailed descriptions, categories, or other text-based information in the qualitative_data section.
-        3. For the quantitative_data, only include numerical data that's directly relevant to the query.
-        4. In the summary, provide a comprehensive analysis that ties together the qualitative and quantitative aspects.
-        5. Ensure all data included is directly related to the user's query.
-        6. If the query mentions specific criteria (e.g., a particular rating), make sure to filter the data accordingly.
-        7. For user_requested_columns, only include columns that are explicitly or implicitly requested in the user's query. If no columns are requested, return an empty list [].
-
-        The columns present in our database are: "Location,Room,Product,Category,PackageID,Batch,CBD,THC,CBDA,CBG,CBN,THCA,CustomerRating,MedicalBenefitsReported,RepeatPurchaseFrequency,URL,Description"
-        """
+        prompt = self.json_output_prompt.format(
+            user_query=user_query,
+            final_state=final_state,
+            thought_path=thought_path,
+            sample_data=sample_data
+        )
 
         messages = [
-            {"role": "system", "content": "You are a helpful assistant generating detailed JSON output based on analysis results. Focus on providing rich, relevant qualitative data along with supporting quantitative information. Be precise in identifying user-requested columns, returning an empty list if none are explicitly or implicitly requested."},
+            {"role": "system", "content": "You are a helpful assistant generating detailed JSON output based on analysis results."},
             {"role": "user", "content": prompt}
         ]
 
@@ -202,17 +172,17 @@ class TreeOfThoughts:
             )
             self.logger.info("Received response from OpenAI API")
 
-            # Remove any potential markdown formatting
+            # Process and clean the JSON string
             json_string = response.choices[0].message['content'].strip()
             if json_string.startswith('```json'):
-                json_string = json_string[7:]  # Remove ```json
+                json_string = json_string[7:]
             if json_string.endswith('```'):
-                json_string = json_string[:-3]  # Remove ```
-            json_string = json_string.strip()  # Remove any leading/trailing whitespace
+                json_string = json_string[:-3]
+            json_string = json_string.strip()
 
             json_output = json.loads(json_string)
             
-            # Ensure user_requested_columns is an empty list if no columns were requested
+            # Ensure 'user_requested_columns' is present in the output
             if 'user_requested_columns' not in json_output or not json_output['user_requested_columns']:
                 json_output['user_requested_columns'] = []
 

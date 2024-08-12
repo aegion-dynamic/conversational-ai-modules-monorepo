@@ -2,29 +2,31 @@ import openai
 
 class IntentClassifier:
     """
-    A class to classify the intent of a user's input using OpenAI's GPT-3.5-turbo model.
+    A class for classifying user intent using OpenAI's GPT model.
     """
-    def __init__(self, api_key: str):
+
+    def __init__(self, api_key: str, classification_prompt: str = None):
         """
-        Initialize the IntentClassifier with the provided OpenAI API key.
+        Initialize the IntentClassifier.
 
         Args:
-            api_key (str): The OpenAI API key for accessing the GPT model.
+            api_key (str): OpenAI API key.
+            classification_prompt (str, optional): Custom prompt for intent classification.
         """
         self.api_key = api_key
         openai.api_key = self.api_key
+        
+        self.classification_prompt = classification_prompt or self.default_classification_prompt()
 
-    def classify_intent(self, user_input: str) -> str:
+    @staticmethod
+    def default_classification_prompt():
         """
-        Classify the intent of the user's input.
-
-        Args:
-            user_input (str): The input text from the user.
+        Provide a default classification prompt if none is provided.
 
         Returns:
-            str: The classified intent number as a string.
+            str: Default classification prompt.
         """
-        prompt = f"""
+        return """
         Classify the user's intent based on the following input:
 
         User Input: {user_input}
@@ -39,12 +41,26 @@ class IntentClassifier:
         Respond with only the number corresponding to the intent.
         """
 
+    def classify_intent(self, user_input: str) -> str:
+        """
+        Classify the intent of the user input using OpenAI's GPT model.
+
+        Args:
+            user_input (str): The user's input to classify.
+
+        Returns:
+            str: The classified intent as a string (1-5).
+        """
+        # Format the prompt with the user input
+        prompt = self.classification_prompt.format(user_input=user_input)
+
         messages = [
             {"role": "system", "content": "You are a helpful assistant classifying user intent."},
             {"role": "user", "content": prompt}
         ]
 
         try:
+            # Call OpenAI API for intent classification
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=messages,
