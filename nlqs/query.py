@@ -37,69 +37,69 @@ class SummarizedInput:
 #         self.column_descriptions, self.numerical_columns, self.categorical_columns = retrieve_descriptions_and_types_from_db()
 
 
-def get_chroma_collection(
-        chroma_client,
-        collection_name: str, 
-        db_driver: Union[SQLiteDriver, PostgresDriver], 
-        dataset_table_name: str
-    ) -> chromadb.Collection:
-    """Gets the chroma collection.
+# def get_chroma_collection(
+#         chroma_client,
+#         collection_name: str, 
+#         db_driver: Union[SQLiteDriver, PostgresDriver], 
+#         dataset_table_name: str
+#     ) -> chromadb.Collection:
+#     """Gets the chroma collection.
 
-    Returns:
-        Chroma: Chroma collection.
-    """
+#     Returns:
+#         Chroma: Chroma collection.
+#     """
    
-    collections = [col.name for col in chroma_client.list_collections()]
+#     collections = [col.name for col in chroma_client.list_collections()]
 
-    if collection_name in collections:
-        print(f"Collection '{collection_name}' already exists, getting existing collection...")
-        chroma_collection = chroma_client.get_collection(collection_name)
-    else:
-        print(f"Collection '{collection_name}' does not exists, Creating new collection...")
-        collection = chroma_client.create_collection(collection_name)
+#     if collection_name in collections:
+#         print(f"Collection '{collection_name}' already exists, getting existing collection...")
+#         chroma_collection = chroma_client.get_collection(collection_name)
+#     else:
+#         print(f"Collection '{collection_name}' does not exists, Creating new collection...")
+#         collection = chroma_client.create_collection(collection_name)
 
-        data = db_driver.fetch_data_from_database(dataset_table_name)
+#         data = db_driver.fetch_data_from_database(dataset_table_name)
 
-        if data is None:
-            raise ValueError("No data found in the database.")
+#         if data is None:
+#             raise ValueError("No data found in the database.")
 
-        # TODO - Modify this project specific stuff to work with the data driver
+#         # TODO - Modify this project specific stuff to work with the data driver
 
-        # TODO - Get column names from the database
-        data["combined_text"] = data[
-            ["Product", "Category", "PackageID", "MedicalBenefitsReported", "Description"]
-        ].apply(lambda x: " ".join(x.dropna().astype(str)), axis=1)
-        texts = data["combined_text"].tolist()
-        data["meta_data"] = data[
-            [
-                "Category",
-                "CustomerRating",
-                "RepeatPurchaseFrequency",
-                "Location",
-                "Room",
-                "Batch",
-                "CBD",
-                "THC",
-                "CBDA",
-                "CBG",
-                "CBN",
-                "THCA",
-                "URL",
-            ]
-        ].apply(lambda x: " ".join(x.dropna().astype(str)), axis=1)
-        metadata = data["meta_data"].tolist()
+#         # TODO - Get column names from the database
+#         data["combined_text"] = data[
+#             ["Product", "Category", "PackageID", "MedicalBenefitsReported", "Description"]
+#         ].apply(lambda x: " ".join(x.dropna().astype(str)), axis=1)
+#         texts = data["combined_text"].tolist()
+#         data["meta_data"] = data[
+#             [
+#                 "Category",
+#                 "CustomerRating",
+#                 "RepeatPurchaseFrequency",
+#                 "Location",
+#                 "Room",
+#                 "Batch",
+#                 "CBD",
+#                 "THC",
+#                 "CBDA",
+#                 "CBG",
+#                 "CBN",
+#                 "THCA",
+#                 "URL",
+#             ]
+#         ].apply(lambda x: " ".join(x.dropna().astype(str)), axis=1)
+#         metadata = data["meta_data"].tolist()
 
-        for text, pro, meta in zip(texts, data["Product"], metadata):
-            chroma_collection = collection.add(
-                documents=text,
-                ids=pro,
-                metadatas={
-                    "product details: 'Category','CustomerRating','PurchaseFrequency','Location', 'Room', 'Batch', 'CBD','THC','CBDA','CBG','CBN','THCA', 'URL' ": meta
-                },
-            )
+#         for text, pro, meta in zip(texts, data["Product"], metadata):
+#             chroma_collection = collection.add(
+#                 documents=text,
+#                 ids=pro,
+#                 metadatas={
+#                     "product details: 'Category','CustomerRating','PurchaseFrequency','Location', 'Room', 'Batch', 'CBD','THC','CBDA','CBG','CBN','THCA', 'URL' ": meta
+#                 },
+#             )
 
-        chroma_collection = chroma_client.get_collection(collection_name)
-    return chroma_collection
+#         chroma_collection = chroma_client.get_collection(collection_name)
+#     return chroma_collection
 
 
 # Default system prompt for the LLM.

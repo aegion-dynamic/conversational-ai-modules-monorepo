@@ -184,6 +184,40 @@ class PostgresDriver(AbstractDriver):
             return pd.DataFrame()  # Return an empty DataFrame on error
             
         return df
+    
+    def get_primary_key(self, table_name: str) -> Optional[str]:
+            """
+            Retrieves the primary key column name from a SQLite table.
+
+            Args:
+                db_file (str): The path to the SQLite database file.
+                table_name (str): The name of the table to check.
+
+            Returns:
+                str: The name of the primary key column, or None if no primary key is found.
+            """
+            if self.cursor is None or self._db_connection is None:
+                raise ValueError("Database connection not established.")
+
+            try:
+                conn = self._db_connection
+                cursor = conn.cursor()
+
+                # Execute a query to get the primary key information
+                cursor.execute(f"PRAGMA table_info({table_name})")
+                table_info = cursor.fetchall()
+
+                # Iterate through the table information to find the primary key
+                for row in table_info:
+                    if row[5] == 1:  # Check if the 'pk' column is set to 1 (indicating primary key)
+                        return row[1]  # Return the column name
+
+                # If no primary key is found, return None
+                return None
+
+            except psycopg2.Error as e:
+                print(f"Error getting primary key: {e}")
+                return None
 
     @property
     def db_connection(self):

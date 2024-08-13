@@ -3,13 +3,12 @@ from nlqs.database.sqlite import SQLiteDriver, SQLiteConnectionConfig
 import re
 from typing import Dict, List, Tuple, Union
 import chromadb
-from nlqs.description_generator import generate_column_description
+from nlqs.description_generator import generate_column_description, get_chroma_collection
 
 
 from nlqs.database.sqlite import SQLiteDriver
 from nlqs.query import (
     generate_query,
-    get_chroma_collection,
     similarity_search,
     summarize,
 )
@@ -43,13 +42,13 @@ class NLQS:
         self.connection_driver.connect()
 
         # Create the chroma client
-        chroma_client  = chromadb.PersistentClient()
-        self.chroma_collection = get_chroma_collection(
-            chroma_client=chroma_client, 
-            collection_name=chroma_config.collection_name,
-            db_driver=self.connection_driver,
-            dataset_table_name=connection_config.dataset_table_name
-        )
+        # chroma_client  = chromadb.PersistentClient()
+        # self.chroma_collection = get_chroma_collection(
+        #     chroma_client=chroma_client, 
+        #     collection_name=chroma_config.collection_name,
+        #     db_driver=self.connection_driver,
+        #     dataset_table_name=connection_config.dataset_table_name
+        # )
 
         # Create the llm object
         # Initializes the ChatOpenAI LLM model
@@ -81,6 +80,7 @@ class NLQS:
     def execute_nlqs_workflow(self,
         user_input: str,
         chat_history: List[Tuple[str, str]],
+        chroma_config: ChromaDBConfig
     ) -> Tuple[str, List[Tuple[str, str]]]:
         """This function is where the whole interaction happens.
         It takes the user input and chat history as input and returns the response if the user's intent is either phatic_communication, profanity or sql_injection.
@@ -113,16 +113,24 @@ class NLQS:
 
         # Database Connection
         driver = self.connection_driver
-        # Chroma Collection
-        chroma_collections = self.chroma_collection
 
         column_descriptions, numerical_columns, categorical_columns = self._create_introspection_table()
 
-        # TODO - Figure out where you want to get them from
-        column_descriptions_dict: Dict[str, str] = column_descriptions
-        numerical_columns_list: List[str] = numerical_columns
-        categorical_columns_list: List[str] = categorical_columns
-        collections=chroma_collections
+        primary_key = driver.get_primary_key(driver.db_config.dataset_table_name)
+        # Chroma Collection
+        chroma_collections = get_chroma_collection(
+            collection_name=chroma_config.collection_name,
+            db_driver=driver,
+            dataset_table_name=driver.db_config.dataset_table_name,
+            categorical_columns=categorical_columns,
+            numerical_columns=numerical_columns,
+            primary_key=primary_key
+        )
+
+        # column_descriptions_dict: Dict[str, str] = column_descriptions
+        # numerical_columns_list: List[str] = numerical_columns
+        # categorical_columns_list: List[str] = categorical_columns
+        # collections=chroma_collections
 
 
         # Step 5
@@ -136,9 +144,9 @@ class NLQS:
         summarized_input = summarize(
             user_input=user_input, 
             chat_history=chat_history, 
-            column_descriptions_dictionary=column_descriptions_dict, 
-            numerical_columns=numerical_columns_list, 
-            categorical_columns=categorical_columns_list,
+            column_descriptions_dictionary=column_descriptions, 
+            numerical_columns=numerical_columns, 
+            categorical_columns=categorical_columns,
             llm=self.llm
         )
 
@@ -148,9 +156,9 @@ class NLQS:
             summarized_input = summarize(
                 user_input=user_input, 
                 chat_history=chat_history, 
-                column_descriptions_dictionary=column_descriptions_dict, 
-                numerical_columns=numerical_columns_list, 
-                categorical_columns=categorical_columns_list, 
+                column_descriptions_dictionary=column_descriptions, 
+                numerical_columns=numerical_columns, 
+                categorical_columns=categorical_columns, 
                 llm=self.llm
             )
             count += 1
@@ -171,9 +179,9 @@ class NLQS:
                     user_input=user_input,
                     summarized_input=summarized_input,
                     chat_history=chat_history,
-                    column_descriptions=column_descriptions_dict,
-                    numerical_columns=numerical_columns_list,
-                    categorical_columns=categorical_columns_list,
+                    column_descriptions=column_descriptions,
+                    numerical_columns=numerical_columns,
+                    categorical_columns=categorical_columns,
                     llm=self.llm,
                     dataset_table_name=driver.db_config.dataset_table_name
                 )
@@ -184,7 +192,7 @@ class NLQS:
 
                     # Step 11
                     if query_result == "No results found.":
-                        query_result = similarity_search(collections, user_input)
+                        query_result = similarity_search(chroma_collections, user_input)
                     response = query_result
                 else:
                     response = "error while generating query. Please try again."
