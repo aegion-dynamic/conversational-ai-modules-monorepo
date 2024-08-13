@@ -28,6 +28,19 @@ class PostgresConnectionConfig:
 
 class PostgresDriver(AbstractDriver):
     def __init__(self, pg_config: PostgresConnectionConfig):
+        """
+        
+        Example:
+        postgres_config = PostgresConnectionConfig(
+            host="localhost", 
+            port=5432, 
+            user="postgres",  
+            password="password",
+            database_name="aegion",  
+            dataset_table_name="new_dataset"  
+        )
+
+        """
         self.db_config = pg_config
         self.db_connection = None
         self.cursor = None
@@ -61,6 +74,8 @@ class PostgresDriver(AbstractDriver):
         Returns:
             str: the result of the query.
         """
+        if self.cursor is None or self.db_connection is None:
+                raise ValueError("Database connection not established.")
         try:
             self.cursor.execute(query)
             result = self.cursor.fetchall()
@@ -71,7 +86,7 @@ class PostgresDriver(AbstractDriver):
         except psycopg2.Error as e:
             error_message = f"Error executing SQL query: {e}"
             logger.error(error_message)
-            return error_message
+            raise e
 
     def retrieve_descriptions_and_types_from_db(self) -> Tuple[Dict[str, str], List[str], List[str]]:
         """Retrieves descriptions and types from the PostgreSQL database.
@@ -82,6 +97,9 @@ class PostgresDriver(AbstractDriver):
         Returns:
             Tuple[List[str], List[str], List[str]]: Return descriptions, numerical_columns, categorial_columns
         """
+        if self.cursor is None or self.db_connection is None:
+            raise ValueError("Database connection not established.")
+
         try:
             # Retrieve descriptions
             self.cursor.execute("SELECT column_name, description FROM column_descriptions")
@@ -110,7 +128,10 @@ class PostgresDriver(AbstractDriver):
         """
         if not query.strip() or not query.lower().startswith("select"):
             return False
-
+        
+        if self.cursor is None or self.db_connection is None:
+            raise ValueError("Database connection not established.")
+        
         try:
             match = re.search(r"FROM\s+(\w+)", query, re.IGNORECASE)
             if not match:
@@ -149,6 +170,8 @@ class PostgresDriver(AbstractDriver):
         Returns:
             pd.DataFrame: A DataFrame containing the data from the table, or None if an error occurred.
         """
+        if self.db_connection is None:
+            raise ValueError("Database connection not established.")
         try:
             conn = self.db_connection
             query = f"SELECT * FROM {table_name}"

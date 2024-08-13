@@ -11,9 +11,8 @@ from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
 from nlqs.database.sqlite import SQLiteDriver
-from nlqs.parameters import OPENAI_API_KEY, chroma_config
+from nlqs.parameters import OPENAI_API_KEY
 from nlqs.query import generate_query, get_chroma_collection, similarity_search, summarize
-from nlqs.parameters import connection_config, driver
 
 # CSV file paths
 TEST_CASES_FILE = "./test_cases.csv"

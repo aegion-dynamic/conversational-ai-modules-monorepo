@@ -8,7 +8,6 @@ from dataclasses import dataclass
 import pandas as pd
 
 from nlqs.database.abstract_driver import AbstractDriver
-from scripts.csv_to_sqlite import convert_csv_to_sqlite
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -34,9 +33,12 @@ class SQLiteDriver(AbstractDriver):
             self.db_connection = sqlite3.connect(self.db_config.db_file)
             self.cursor = self.db_connection.cursor()
             logger.info("Connected to SQLite database.")
+            print(f"Connected to SQLite database.")
         except sqlite3.Error as e:
             logger.error(f"Error connecting to database: {e}")
-            raise
+            # raise e
+            print(f"Error connecting to database: {e}")
+            raise e
 
     def disconnect(self):
         if self.db_connection:
@@ -52,6 +54,8 @@ class SQLiteDriver(AbstractDriver):
         Returns:
             str: the result of the query.
         """
+        if self.cursor is None or self.db_connection is None:
+            raise ValueError("Database connection not established.")
         try:
             self.cursor.execute(query)
             result = self.cursor.fetchall()
@@ -73,6 +77,8 @@ class SQLiteDriver(AbstractDriver):
         Returns:
             Tuple[List[str], List[str], List[str]]: Return descriptions, numerical_columns, categorial_columns
         """
+        if self.cursor is None or self.db_connection is None:
+            raise ValueError("Database connection not established.")
         try:
             # Retrieve descriptions
             self.cursor.execute("SELECT column_name, description FROM column_descriptions")
@@ -103,6 +109,9 @@ class SQLiteDriver(AbstractDriver):
         """
         logger.info(f"Validating query: {query}")
         print(f"Validating query: {query}")
+
+        if self.cursor is None or self.db_connection is None:
+            raise ValueError("Database connection not established.")
 
         try:
             match = re.search(r"FROM\s+(\w+)", query, re.IGNORECASE)
@@ -152,7 +161,9 @@ class SQLiteDriver(AbstractDriver):
         Returns:
             bool: True if the table exists, False otherwise.
         """
-
+        if self.cursor is None or self.db_connection is None:
+            raise ValueError("Database connection not established.")
+        
         try:
             conn = self.db_connection
             # cursor = conn.cursor()
@@ -180,8 +191,8 @@ class SQLiteDriver(AbstractDriver):
         """
         try:
             if not self.check_table_exists(table_name):
-                # raise ValueError(f"Table '{table_name}' does not exist in the database.")
-                convert_csv_to_sqlite()
+                raise ValueError(f"Table '{table_name}' does not exist in the database.")
+
             conn = self.db_connection
             query = f"SELECT * FROM {table_name}"
             if conn is None:

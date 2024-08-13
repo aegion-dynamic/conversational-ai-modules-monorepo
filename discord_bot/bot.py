@@ -6,7 +6,8 @@ from typing import Any, List, Optional, Tuple, Union
 import discord
 from discord.ext import commands
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from nlqs.parameters import chroma_config, connection_config
+from nlqs.database.sqlite import SQLiteConnectionConfig
+from nlqs.description_generator import ChromaDBConfig
 
 import discord_bot.memory as memory
 from chatbot.conversation import Chatbot
@@ -23,6 +24,19 @@ from nlqs.nlqs import NLQS
 
 # Global variable to store the state of the bot
 global_state = BotState.IDLE
+
+
+# ChromaDB configuration
+chroma_config = ChromaDBConfig(
+    collection_name="aegion",  
+    persist_path=Path("./chroma")  
+)
+
+# SQLite configuration
+sqlite_config = SQLiteConnectionConfig(
+    db_file=Path("aegion.db"),  
+    dataset_table_name="new_dataset"
+)
 
 
 def create_bot() -> commands.Bot:
