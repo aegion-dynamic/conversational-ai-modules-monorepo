@@ -1,52 +1,22 @@
 import sqlite3
+from typing import Union
 from langchain.chains import LLMChain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic.v1 import SecretStr
 
 from nlqs.parameters import OPENAI_API_KEY
-from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
-from nlqs.database.postgres import PostgresConnectionConfig
+from nlqs.database.sqlite import SQLiteDriver
+from nlqs.database.postgres import PostgresDriver
 from pathlib import Path
 from dataclasses import dataclass
+import pandas as pd
 
 @dataclass
 class ChromaDBConfig:
     collection_name: str
     persist_path: Path
     is_local: bool = True
-
-# SQLite configuration
-sqlite_config = SQLiteConnectionConfig(
-    db_file=Path("aegion.db"),  
-    dataset_table_name="new_dataset"
-)
-
-# PostgreSQL configuration
-postgres_config = PostgresConnectionConfig(
-    host="localhost", 
-    port=5432, 
-    user="postgres",  
-    password="password",
-    database_name="aegion",  
-    dataset_table_name="new_dataset"  
-)
-
-# ChromaDB configuration
-chroma_config = ChromaDBConfig(
-    collection_name="aegion",  
-    persist_path=Path("./chroma")  
-)
-
-# Choose either sqlite_config or postgres_config based on your database type
-connection_config = sqlite_config 
-# Or connection_config = postgres_config
-
-driver = SQLiteDriver(connection_config)
-driver.connect()
-
-
-data_fetched = driver.fetch_data_from_database(connection_config.dataset_table_name)
 
 
 # TODO - Use the database Object for doing this
@@ -114,8 +84,11 @@ def get_column_descriptions(dataframe, input_text) -> dict:
 
 
 #  TODO - Use the database Object for doing this
-def store_descriptions_in_db(descriptions, numerical_columns, categorical_columns, db_file=connection_config.db_file):
-    conn = sqlite3.connect(db_file)
+def store_descriptions_in_db(descriptions, numerical_columns, categorical_columns, db_driver: Union[SQLiteDriver, PostgresDriver]):
+    conn = db_driver._db_connection
+    if conn is None:
+        raise ValueError("Database connection not established.")
+    
     c = conn.cursor()
 
     # Create table for column descriptions
@@ -169,12 +142,7 @@ def store_descriptions_in_db(descriptions, numerical_columns, categorical_column
     conn.close()
 
 # TODO- Figure out where to call this function
-def generate_column_description():
-    df = data_fetched
-
-    if df is None:
-        print("Error fetching data from SQLite.")
-        raise Exception("Error fetching data from SQLite.")
+def generate_column_description(df: pd.DataFrame, db_driver: Union[SQLiteDriver, PostgresDriver]):
 
     # Get column descriptions
     column_descriptions = get_column_descriptions(
@@ -187,7 +155,7 @@ def generate_column_description():
 
     # Store descriptions and column types in the database
     store_descriptions_in_db(
-        descriptions=column_descriptions, numerical_columns=numerical_columns, categorical_columns=categorical_columns
+        descriptions=column_descriptions, numerical_columns=numerical_columns, categorical_columns=categorical_columns, db_driver=db_driver
     )
 
     print(column_descriptions)

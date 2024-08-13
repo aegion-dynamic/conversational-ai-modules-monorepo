@@ -30,3 +30,4 @@ class AbstractDriver(ABC):
     @abstractmethod
     def validate_query(self, query):
         raise NotImplementedError("This method must be implemented by the subclass")
+    

@@ -42,27 +42,27 @@ class PostgresDriver(AbstractDriver):
 
         """
         self.db_config = pg_config
-        self.db_connection = None
+        self._db_connection = None
         self.cursor = None
 
     def connect(self):
         try:
-            self.db_connection = psycopg2.connect(
+            self._db_connection = psycopg2.connect(
                 dbname=self.db_config.database_name, 
                 user=self.db_config.user, 
                 password=self.db_config.password, 
                 host=self.db_config.host, 
                 port=self.db_config.port
             )            
-            self.cursor = self.db_connection.cursor()
+            self.cursor = self._db_connection.cursor()
             logger.info("Connected to PostgreSQL database.")
         except psycopg2.Error as e:
             logger.error(f"Error connecting to database: {e}")
             raise
 
     def disconnect(self):
-        if self.db_connection:
-            self.db_connection.close()
+        if self._db_connection:
+            self._db_connection.close()
             logger.info("Disconnected from PostgreSQL database.")
 
     def execute_query(self, query: str) -> str:
@@ -74,12 +74,12 @@ class PostgresDriver(AbstractDriver):
         Returns:
             str: the result of the query.
         """
-        if self.cursor is None or self.db_connection is None:
+        if self.cursor is None or self._db_connection is None:
                 raise ValueError("Database connection not established.")
         try:
             self.cursor.execute(query)
             result = self.cursor.fetchall()
-            self.db_connection.commit()
+            self._db_connection.commit()
             result_str = str(result)
             logger.info(f"Query executed successfully: {result_str}")
             return result_str if result else "No results found."
@@ -97,7 +97,7 @@ class PostgresDriver(AbstractDriver):
         Returns:
             Tuple[List[str], List[str], List[str]]: Return descriptions, numerical_columns, categorial_columns
         """
-        if self.cursor is None or self.db_connection is None:
+        if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
 
         try:
@@ -129,7 +129,7 @@ class PostgresDriver(AbstractDriver):
         if not query.strip() or not query.lower().startswith("select"):
             return False
         
-        if self.cursor is None or self.db_connection is None:
+        if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
         
         try:
@@ -170,10 +170,10 @@ class PostgresDriver(AbstractDriver):
         Returns:
             pd.DataFrame: A DataFrame containing the data from the table, or None if an error occurred.
         """
-        if self.db_connection is None:
+        if self._db_connection is None:
             raise ValueError("Database connection not established.")
         try:
-            conn = self.db_connection
+            conn = self._db_connection
             query = f"SELECT * FROM {table_name}"
             if conn is None:
                 raise ValueError("Database connection not established.")
@@ -184,3 +184,9 @@ class PostgresDriver(AbstractDriver):
             return pd.DataFrame()  # Return an empty DataFrame on error
             
         return df
+
+    @property
+    def db_connection(self):
+        if self._db_connection is None:
+            raise ValueError("Database connection not established.")
+        return self._db_connection

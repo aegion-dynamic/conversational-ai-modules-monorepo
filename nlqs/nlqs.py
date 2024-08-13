@@ -32,22 +32,22 @@ class NLQS:
     def __init__(self, connection_config: Union[SQLiteConnectionConfig, PostgresConnectionConfig], chroma_config: ChromaDBConfig) -> None:
         # TODO - Figure out what the constructor parameters are
         if isinstance(connection_config, SQLiteConnectionConfig):
-            self.connection = SQLiteDriver(connection_config)
+            self.connection_driver = SQLiteDriver(connection_config)
         elif isinstance(connection_config, PostgresConnectionConfig):
-            self.connection = PostgresDriver(connection_config)
+            self.connection_driver = PostgresDriver(connection_config)
     
         else:
             raise ValueError("Invalid connection configuration")
 
         # Initialize the connection to the database
-        self.connection.connect()
+        self.connection_driver.connect()
 
         # Create the chroma client
         chroma_client  = chromadb.PersistentClient()
         self.chroma_collection = get_chroma_collection(
             chroma_client=chroma_client, 
             collection_name=chroma_config.collection_name,
-            db_driver=self.connection,
+            db_driver=self.connection_driver,
             dataset_table_name=connection_config.dataset_table_name
         )
 
@@ -61,14 +61,18 @@ class NLQS:
         pass
 
     def _create_introspection_table(self):
-        driver = self.connection
+        driver = self.connection_driver
         
         # Step 1
         column_descriptions, numerical_columns, categorical_columns = driver.retrieve_descriptions_and_types_from_db()
 
         if column_descriptions == {}:
             # Step 2
-            generate_column_description()
+            generate_column_description(
+                df=self.connection_driver.fetch_data_from_database(
+                    table_name=self.connection_driver.db_config.dataset_table_name),
+                db_driver=self.connection_driver
+            )
             column_descriptions, numerical_columns, categorical_columns = driver.retrieve_descriptions_and_types_from_db()
 
         return column_descriptions, numerical_columns, categorical_columns
@@ -108,7 +112,7 @@ class NLQS:
         # Step 0 - Create the pre-requisite objects
 
         # Database Connection
-        driver = self.connection
+        driver = self.connection_driver
         # Chroma Collection
         chroma_collections = self.chroma_collection
 

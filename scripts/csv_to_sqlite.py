@@ -34,7 +34,7 @@ driver = SQLiteDriver(SQLiteConnectionConfig(
 
 driver.connect()
 
-conn = driver.db_connection
+conn = driver._db_connection
 
 
 # Write the DataFrame to a SQLite table
