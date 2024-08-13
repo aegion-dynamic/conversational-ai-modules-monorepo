@@ -7,6 +7,7 @@ from typing import Dict, List, Tuple, Union
 from langchain.chains import LLMChain
 from langchain.memory import ConversationBufferMemory
 from langchain_core.prompts import PromptTemplate
+from langchain_openai import ChatOpenAI, OpenAI
 from nlqs.database.sqlite import SQLiteDriver
 from nlqs.database.postgres import PostgresDriver
 
@@ -130,7 +131,7 @@ def summarize(
     column_descriptions_dictionary: Dict[str, str],
     numerical_columns: List[str],
     categorical_columns: List[str],
-    llm, 
+    llm: Union[ChatOpenAI, OpenAI], 
 ) -> SummarizedInput:
     """Summarizes the user input and returns the summary, quantitative data, and qualitative data, along with the user requested columns in a JSON format.
 
@@ -140,6 +141,7 @@ def summarize(
         column_descriptions (dict[str, str]): The column descriptions.
         numerical_columns (list[str]): The numerical columns.
         categorical_columns (list[str]): The categorical columns.
+        llm (Union[ChatOpenAI, OpenAI]): The LLM object.(Contains the details of the language we are using.)
 
     Returns:
         dict: {
@@ -164,15 +166,24 @@ def summarize(
     # Summarize the user input
     instruction = f"""
     You will receive a user input and the chat history. Your task is to:
-    1. Analyze the user input and identify key details based on our available data and chat history.
-    2. Summarize the input, classifying the data into qualitative and quantitative categories.
-    3. Identify relevant columns from which we can provide an answer. Pay close attention to the user's intent and specific mentions of data columns:
+    
+    1. **Single-Word Queries**: If the user input is a single word or very short (e.g., one or two words), provide a direct response if possible. If the query is unclear, prompt the user to elaborate.
+       - Example response: "It seems you're asking about something specific. Could you provide more details?"
+
+    2. **Structured Analysis**: For all other inputs, analyze the user input and identify key details based on our available data and chat history.
+    
+    3. Summarize the input, classifying the data into qualitative and quantitative categories.
+    
+    4. Identify relevant columns from which we can provide an answer. Pay close attention to the user's intent and specific mentions of data columns:
        - Are they seeking information about products, medications, treatments, or other relevant categories?
        - If the user is seeking information about a product, also provide the URL of the product if available.
        - Look for explicit mentions of column names, synonyms, or phrases that indicate the type of information requested. If the user specifies certain attributes or metrics, consider these as user-requested columns.
-    4. Classify the user's intent. Possible intents include: phatic_communication, sql_injection, profanity, and other.
-    5. Output the result in a JSON format.
-    6. Do not output any other information except the JSON. Do not add [OUT], [/OUT] to the output.(!important)
+
+    5. Classify the user's intent. Possible intents include: phatic_communication, sql_injection, profanity, and other.
+
+    6. Output the result in a JSON format.
+
+    7. Do not output any other information except the JSON. Do not add [OUT], [/OUT] to the output.(!important)
     
     The output JSON should have the following structure:
 
@@ -201,6 +212,7 @@ def summarize(
 
     Now, summarize the user input and provide the structured output in JSON format.
     """
+
     system_prompt = "You are an expert in summarization and expressing key ideas succinctly."
     prompt = get_prompt(instruction, system_prompt)
     prompt_template = PromptTemplate(template=prompt, input_variables=["chat_history", "user_input"])
@@ -262,7 +274,7 @@ def generate_query(
     column_descriptions: Dict[str, str],
     numerical_columns: List[str],
     categorical_columns: List[str],
-    llm,
+    llm: Union[ChatOpenAI, OpenAI],
     dataset_table_name: str
 ) -> str:
     """Generates an SQL query based on the user input and chat history.
@@ -274,6 +286,8 @@ def generate_query(
         column_descriptions (dict): the column descriptions.
         numerical_columns (list[str]): the numerical columns.
         categorical_columns (list[str]): the categorical columns.
+        llm (Union[ChatOpenAI, OpenAI]): the LLM object.
+        dataset_table_name (str): the dataset table name.
 
     Returns:
         str: execute_query function executes the SQL query

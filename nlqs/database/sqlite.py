@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from nlqs.database.abstract_driver import AbstractDriver
+from scripts.csv_to_sqlite import convert_csv_to_sqlite
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -140,7 +141,32 @@ class SQLiteDriver(AbstractDriver):
             logger.error(f"Error validating query: {e}")
             print(f"Error validating query: {e}")
             return False
+        
+    def check_table_exists(self, table_name: str) -> bool:
+        """Checks if a table exists in a SQLite database.
 
+        Args:
+            db_file (str): The path to the SQLite database file.
+            table_name (str): The name of the table to check.
+
+        Returns:
+            bool: True if the table exists, False otherwise.
+        """
+
+        try:
+            conn = self.db_connection
+            # cursor = conn.cursor()
+            self.cursor.execute(
+                """
+                SELECT name FROM sqlite_master WHERE type='table' AND name=?
+                """,
+                (table_name,),
+            )
+            result = self.cursor.fetchone()
+            return bool(result)  # True if result is not None, False otherwise
+        except sqlite3.Error as e:
+            print(f"Error checking table existence: {e}")
+            return False
 
     def fetch_data_from_database(self, table_name: str) -> pd.DataFrame:
         """Fetch data from a SQLite database table.
@@ -150,9 +176,12 @@ class SQLiteDriver(AbstractDriver):
             table_name (str): Name of the table to fetch data from.
 
         Returns:
-            Optional[pd.DataFrame]: A DataFrame containing the data from the table, or None if an error occurred.
+            pd.DataFrame: A DataFrame containing the data from the table, or Null dataframe if an error occurred.
         """
         try:
+            if not self.check_table_exists(table_name):
+                # raise ValueError(f"Table '{table_name}' does not exist in the database.")
+                convert_csv_to_sqlite()
             conn = self.db_connection
             query = f"SELECT * FROM {table_name}"
             if conn is None:
