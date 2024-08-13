@@ -8,8 +8,6 @@ SQLITE_DB_FILE = "./aegion.db"
 
 SQL_TABLE_NAME = "new_dataset"
 
-PRODUCT_DESCRIPTIONS_CSV = "./product_descriptions.csv"
-
 LOGGER_FILE = "chatbot.log"
 
 # OUTPUT_COLUMNS = ["Description", "URL", "CustomerRating", "Product"]

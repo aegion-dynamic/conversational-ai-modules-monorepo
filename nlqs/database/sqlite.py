@@ -3,11 +3,11 @@ import re
 import sqlite3
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
 
 import pandas as pd
 
-from discord_bot.parameters import LOGGER_FILE, SQLITE_DB_FILE
-from nlqs.database.driver import AbstractDriver
+from nlqs.database.abstract_driver import AbstractDriver
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -15,37 +15,34 @@ logger = logging.getLogger(__name__)
 # Set the logging level (e.g., DEBUG, INFO, WARNING, ERROR)
 logger.setLevel(logging.INFO)
 
-# Create a file handler to save logs
-file_handler = logging.FileHandler(LOGGER_FILE)
 
-# Create a formatter to format the log messages
-formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-
-# Add the formatter to the file handler
-file_handler.setFormatter(formatter)
-
-# Add the file handler to the logger
-logger.addHandler(file_handler)
+@dataclass
+class SQLiteConnectionConfig:
+    db_file: Path
+    dataset_table_name: str
 
 
 class SQLiteDriver(AbstractDriver):
-    def __init__(self, config: Dict):
-        self.db_file = config.get("db_file", SQLITE_DB_FILE)
-        self.conn = None
+    def __init__(self, sqlite_config: SQLiteConnectionConfig):
+        self.db_config = sqlite_config
+        self._db_connection = None
         self.cursor = None
 
     def connect(self):
         try:
-            self.conn = sqlite3.connect(self.db_file)
-            self.cursor = self.conn.cursor()
+            self._db_connection = sqlite3.connect(self.db_config.db_file)
+            self.cursor = self._db_connection.cursor()
             logger.info("Connected to SQLite database.")
+            print(f"Connected to SQLite database.")
         except sqlite3.Error as e:
             logger.error(f"Error connecting to database: {e}")
-            raise
+            # raise e
+            print(f"Error connecting to database: {e}")
+            raise e
 
     def disconnect(self):
-        if self.conn:
-            self.conn.close()
+        if self._db_connection:
+            self._db_connection.close()
             logger.info("Disconnected from SQLite database.")
 
     def execute_query(self, query: str) -> str:
@@ -57,10 +54,12 @@ class SQLiteDriver(AbstractDriver):
         Returns:
             str: the result of the query.
         """
+        if self.cursor is None or self._db_connection is None:
+            raise ValueError("Database connection not established.")
         try:
             self.cursor.execute(query)
             result = self.cursor.fetchall()
-            self.conn.commit()
+            self._db_connection.commit()
             result_str = str(result)
             logger.info(f"Query executed successfully: {result_str}")
             return result_str if result else "No results found."
@@ -78,18 +77,24 @@ class SQLiteDriver(AbstractDriver):
         Returns:
             Tuple[List[str], List[str], List[str]]: Return descriptions, numerical_columns, categorial_columns
         """
-        # Retrieve descriptions
-        self.cursor.execute("SELECT column_name, description FROM column_descriptions")
-        description_rows = self.cursor.fetchall()
-        descriptions = {row[0]: row[1] for row in description_rows}
+        if self.cursor is None or self._db_connection is None:
+            raise ValueError("Database connection not established.")
+        try:
+            # Retrieve descriptions
+            self.cursor.execute("SELECT column_name, description FROM column_descriptions")
+            description_rows = self.cursor.fetchall()
+            descriptions = {row[0]: row[1] for row in description_rows}
 
-        # Retrieve column types
-        self.cursor.execute("SELECT column_name, column_type FROM column_types")
-        type_rows = self.cursor.fetchall()
-        numerical_columns = [row[0] for row in type_rows if row[1] == "numerical"]
-        categorical_columns = [row[0] for row in type_rows if row[1] == "categorical"]
+            # Retrieve column types
+            self.cursor.execute("SELECT column_name, column_type FROM column_types")
+            type_rows = self.cursor.fetchall()
+            numerical_columns = [row[0] for row in type_rows if row[1] == "numerical"]
+            categorical_columns = [row[0] for row in type_rows if row[1] == "categorical"]
 
-        return descriptions, numerical_columns, categorical_columns
+            return descriptions, numerical_columns, categorical_columns
+        except sqlite3.Error as e:
+            logger.error(f"Error retrieving descriptions and types: {e}")
+            return {}, [], []
         
 
     def validate_query(self, query: str) -> bool:
@@ -104,6 +109,9 @@ class SQLiteDriver(AbstractDriver):
         """
         logger.info(f"Validating query: {query}")
         print(f"Validating query: {query}")
+
+        if self.cursor is None or self._db_connection is None:
+            raise ValueError("Database connection not established.")
 
         try:
             match = re.search(r"FROM\s+(\w+)", query, re.IGNORECASE)
@@ -142,9 +150,36 @@ class SQLiteDriver(AbstractDriver):
             logger.error(f"Error validating query: {e}")
             print(f"Error validating query: {e}")
             return False
+        
+    def check_table_exists(self, table_name: str) -> bool:
+        """Checks if a table exists in a SQLite database.
 
+        Args:
+            db_file (str): The path to the SQLite database file.
+            table_name (str): The name of the table to check.
 
-    def fetch_data_from_sqlite(self, table_name: str) -> pd.DataFrame:
+        Returns:
+            bool: True if the table exists, False otherwise.
+        """
+        if self.cursor is None or self._db_connection is None:
+            raise ValueError("Database connection not established.")
+        
+        try:
+            conn = self._db_connection
+            # cursor = conn.cursor()
+            self.cursor.execute(
+                """
+                SELECT name FROM sqlite_master WHERE type='table' AND name=?
+                """,
+                (table_name,),
+            )
+            result = self.cursor.fetchone()
+            return bool(result)  # True if result is not None, False otherwise
+        except sqlite3.Error as e:
+            print(f"Error checking table existence: {e}")
+            return False
+
+    def fetch_data_from_database(self, table_name: str) -> pd.DataFrame:
         """Fetch data from a SQLite database table.
 
         Args:
@@ -152,11 +187,16 @@ class SQLiteDriver(AbstractDriver):
             table_name (str): Name of the table to fetch data from.
 
         Returns:
-            Optional[pd.DataFrame]: A DataFrame containing the data from the table, or None if an error occurred.
+            pd.DataFrame: A DataFrame containing the data from the table, or Null dataframe if an error occurred.
         """
         try:
-            conn = sqlite3.connect(self.db_file)
+            if not self.check_table_exists(table_name):
+                raise ValueError(f"Table '{table_name}' does not exist in the database.")
+
+            conn = self._db_connection
             query = f"SELECT * FROM {table_name}"
+            if conn is None:
+                raise ValueError("Database connection not established.")
             df = pd.read_sql_query(query, conn)
             conn.close()
         except sqlite3.Error as e:
@@ -164,3 +204,11 @@ class SQLiteDriver(AbstractDriver):
             return pd.DataFrame()  # Return an empty DataFrame on error
 
         return df
+
+
+    @property
+    def db_connection(self) -> sqlite3.Connection:
+        if self._db_connection is None:
+            raise ValueError("Database connection not established.")
+        
+        return self._db_connection
