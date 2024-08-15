@@ -75,7 +75,7 @@ class PostgresDriver(AbstractDriver):
             str: the result of the query.
         """
         if self.cursor is None or self._db_connection is None:
-                raise ValueError("Database connection not established.")
+            raise ValueError("Database connection not established.")
         try:
             self.cursor.execute(query)
             result = self.cursor.fetchall()
@@ -170,7 +170,7 @@ class PostgresDriver(AbstractDriver):
         Returns:
             pd.DataFrame: A DataFrame containing the data from the table, or None if an error occurred.
         """
-        if self._db_connection is None:
+        if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
         try:
             conn = self._db_connection

@@ -8,15 +8,8 @@ from pydantic.v1 import SecretStr
 from nlqs.parameters import OPENAI_API_KEY
 from nlqs.database.sqlite import SQLiteDriver
 from nlqs.database.postgres import PostgresDriver
-from pathlib import Path
 from dataclasses import dataclass
 import pandas as pd
-
-@dataclass
-class ChromaDBConfig:
-    collection_name: str
-    persist_path: Path
-    is_local: bool = True
 
 
 # TODO - Use the database Object for doing this
@@ -84,11 +77,13 @@ def get_column_descriptions(dataframe) -> dict:
 
 
 #  TODO - Use the database Object for doing this
-def store_descriptions_in_db(descriptions, numerical_columns, categorical_columns, db_driver: Union[SQLiteDriver, PostgresDriver]):
+def store_descriptions_in_db(
+    descriptions, numerical_columns, categorical_columns, db_driver: Union[SQLiteDriver, PostgresDriver]
+):
     conn = db_driver._db_connection
     if conn is None:
         raise ValueError("Database connection not established.")
-    
+
     c = conn.cursor()
 
     # Create table for column descriptions
@@ -141,14 +136,13 @@ def store_descriptions_in_db(descriptions, numerical_columns, categorical_column
     conn.commit()
     conn.close()
 
+
 def get_chroma_collection(
-        collection_name: str, 
-        db_driver: Union[SQLiteDriver, PostgresDriver], 
-        dataset_table_name: str,
-        categorical_columns: List[str],
-        numerical_columns: List[str],
-        primary_key: Optional[str]
-    ) -> chromadb.Collection:
+    collection_name: str,
+    db_driver: Union[SQLiteDriver, PostgresDriver],
+    dataset_table_name: str,
+    primary_key: Optional[str],
+) -> chromadb.Collection:
     """Gets the chroma collection.
 
     Returns:
@@ -166,6 +160,9 @@ def get_chroma_collection(
 
         data = db_driver.fetch_data_from_database(dataset_table_name)
 
+        numerical_columns = data.select_dtypes(include=["int64", "float64"]).columns.tolist()
+        categorical_columns = data.select_dtypes(include=["object"]).columns.tolist()
+
         if data is None:
             raise ValueError("No data found in the database.")
 
@@ -180,24 +177,25 @@ def get_chroma_collection(
         if not primary_key:
             primary_key = data.columns[0]
 
+        # if the data type of the primary is int converting it into str coz chroma doesn't accept int as the primary key.
+        if data[primary_key].dtype == "int64":
+            data[primary_key] = data[primary_key].astype(str)
+
         for text, pri_key, meta in zip(combined_text, data[primary_key], metadata):
             chroma_collection = collection.add(
                 documents=text,
                 ids=pri_key,
-                metadatas={
-                    f"product details: {str(numerical_columns)} ": meta
-                },
+                metadatas={f"product details: {str(numerical_columns)} ": meta},
             )
 
         chroma_collection = chroma_client.get_collection(collection_name)
     return chroma_collection
 
+
 def generate_column_description(df: pd.DataFrame, db_driver: Union[SQLiteDriver, PostgresDriver]):
 
     # Get column descriptions
-    column_descriptions = get_column_descriptions(
-        dataframe=df
-    )
+    column_descriptions = get_column_descriptions(dataframe=df)
 
     # Identify numerical and categorical columns
     numerical_columns = df.select_dtypes(include=["int64", "float64"]).columns.tolist()
@@ -205,8 +203,11 @@ def generate_column_description(df: pd.DataFrame, db_driver: Union[SQLiteDriver,
 
     # Store descriptions and column types in the database
     store_descriptions_in_db(
-        descriptions=column_descriptions, numerical_columns=numerical_columns, categorical_columns=categorical_columns, db_driver=db_driver
+        descriptions=column_descriptions,
+        numerical_columns=numerical_columns,
+        categorical_columns=categorical_columns,
+        db_driver=db_driver,
     )
-    
+
     print(column_descriptions)
     print("Column descriptions and column types stored in the database.")

@@ -1,5 +1,5 @@
 from nlqs.database.postgres import PostgresDriver, PostgresConnectionConfig
-from nlqs.database.sqlite import SQLiteDriver, SQLiteConnectionConfig 
+from nlqs.database.sqlite import SQLiteDriver, SQLiteConnectionConfig
 import re
 from typing import Dict, List, Tuple, Union
 import chromadb
@@ -24,44 +24,33 @@ class ChromaDBConfig:
     collection_name: str
     persist_path: Path
     is_local: bool = True
-    
+
 
 class NLQS:
 
-    def __init__(self, connection_config: Union[SQLiteConnectionConfig, PostgresConnectionConfig], chroma_config: ChromaDBConfig) -> None:
+    def __init__(self, connection_config: Union[SQLiteConnectionConfig, PostgresConnectionConfig]) -> None:
         # TODO - Figure out what the constructor parameters are
         if isinstance(connection_config, SQLiteConnectionConfig):
             self.connection_driver = SQLiteDriver(connection_config)
         elif isinstance(connection_config, PostgresConnectionConfig):
             self.connection_driver = PostgresDriver(connection_config)
-    
+
         else:
             raise ValueError("Invalid connection configuration")
 
         # Initialize the connection to the database
         self.connection_driver.connect()
 
-        # Create the chroma client
-        # chroma_client  = chromadb.PersistentClient()
-        # self.chroma_collection = get_chroma_collection(
-        #     chroma_client=chroma_client, 
-        #     collection_name=chroma_config.collection_name,
-        #     db_driver=self.connection_driver,
-        #     dataset_table_name=connection_config.dataset_table_name
-        # )
-
         # Create the llm object
         # Initializes the ChatOpenAI LLM model
         self.llm = ChatOpenAI(temperature=0, model="gpt-4-turbo", api_key=SecretStr(OPENAI_API_KEY), max_tokens=1000)
-
-
 
         # TODO - Figure out if we need to create introspection table, and create
         pass
 
     def _create_introspection_table(self):
         driver = self.connection_driver
-        
+
         # Step 1
         column_descriptions, numerical_columns, categorical_columns = driver.retrieve_descriptions_and_types_from_db()
 
@@ -69,18 +58,19 @@ class NLQS:
             # Step 2
             generate_column_description(
                 df=self.connection_driver.fetch_data_from_database(
-                    table_name=self.connection_driver.db_config.dataset_table_name),
-                db_driver=self.connection_driver
+                    table_name=self.connection_driver.db_config.dataset_table_name
+                ),
+                db_driver=self.connection_driver,
             )
-            column_descriptions, numerical_columns, categorical_columns = driver.retrieve_descriptions_and_types_from_db()
+            column_descriptions, numerical_columns, categorical_columns = (
+                driver.retrieve_descriptions_and_types_from_db()
+            )
 
         return column_descriptions, numerical_columns, categorical_columns
 
     # Step 4
-    def execute_nlqs_workflow(self,
-        user_input: str,
-        chat_history: List[Tuple[str, str]],
-        chroma_config: ChromaDBConfig
+    def execute_nlqs_workflow(
+        self, user_input: str, chat_history: List[Tuple[str, str]], chroma_config: ChromaDBConfig
     ) -> Tuple[str, List[Tuple[str, str]]]:
         """This function is where the whole interaction happens.
         It takes the user input and chat history as input and returns the response if the user's intent is either phatic_communication, profanity or sql_injection.
@@ -95,14 +85,14 @@ class NLQS:
         """
 
         # Overview
-        # Step 1 - retrieve descriptions and types from db. check if its empty. if not return the data. 
+        # Step 1 - retrieve descriptions and types from db. check if its empty. if not return the data.
         # Step 2 - else if the retrived data was empty then generate new columns descriptions.
         # Step 3 - next get the chroma collection
         # Step 4 - pass all the retrieved data to the main_workflow method
         # Step 5 - check if the user input is empty if true retun none
         # Step 6 - Else remove the paranthesis from the user input.
         # Step 7 - generate a summary for the user input the required format.
-        # Step 8 - check if the summary is empty. if true retry the generation of the summary, you can do this until five times 
+        # Step 8 - check if the summary is empty. if true retry the generation of the summary, you can do this until five times
         # (the above step is because we were getting errors while converting the generted summary to the json format.)
         # Step 9 - generate an sql query.
         # Step 10 - validate the generated query.
@@ -122,16 +112,8 @@ class NLQS:
             collection_name=chroma_config.collection_name,
             db_driver=driver,
             dataset_table_name=driver.db_config.dataset_table_name,
-            categorical_columns=categorical_columns,
-            numerical_columns=numerical_columns,
-            primary_key=primary_key
+            primary_key=primary_key,
         )
-
-        # column_descriptions_dict: Dict[str, str] = column_descriptions
-        # numerical_columns_list: List[str] = numerical_columns
-        # categorical_columns_list: List[str] = categorical_columns
-        # collections=chroma_collections
-
 
         # Step 5
         if not user_input.strip():
@@ -142,24 +124,24 @@ class NLQS:
 
         # Step 7
         summarized_input = summarize(
-            user_input=user_input, 
-            chat_history=chat_history, 
-            column_descriptions_dictionary=column_descriptions, 
-            numerical_columns=numerical_columns, 
+            user_input=user_input,
+            chat_history=chat_history,
+            column_descriptions_dictionary=column_descriptions,
+            numerical_columns=numerical_columns,
             categorical_columns=categorical_columns,
-            llm=self.llm
+            llm=self.llm,
         )
 
         count = 0
         print(f"summarized_input: {summarized_input}")
         while not summarized_input.summary and count < 5:
             summarized_input = summarize(
-                user_input=user_input, 
-                chat_history=chat_history, 
-                column_descriptions_dictionary=column_descriptions, 
-                numerical_columns=numerical_columns, 
-                categorical_columns=categorical_columns, 
-                llm=self.llm
+                user_input=user_input,
+                chat_history=chat_history,
+                column_descriptions_dictionary=column_descriptions,
+                numerical_columns=numerical_columns,
+                categorical_columns=categorical_columns,
+                llm=self.llm,
             )
             count += 1
             if count == 5:
@@ -183,7 +165,7 @@ class NLQS:
                     numerical_columns=numerical_columns,
                     categorical_columns=categorical_columns,
                     llm=self.llm,
-                    dataset_table_name=driver.db_config.dataset_table_name
+                    dataset_table_name=driver.db_config.dataset_table_name,
                 )
 
                 # Step 10
@@ -201,4 +183,3 @@ class NLQS:
 
         chat_history.append((user_input, response))
         return response, chat_history
-        
