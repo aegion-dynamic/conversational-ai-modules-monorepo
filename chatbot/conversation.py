@@ -42,7 +42,7 @@ def query_template(output_columns, previous_messages: Optional[List[Union[HumanM
         The Output: The length of each response should be concise, taking information from the provided context and utilizing the following guidelines:
 
         1. **Handle Basic Greetings**: If the user input is a simple greeting (e.g., "hello", "hi", "hey", "greetings"), respond with a friendly greeting message. Skip the structured analysis and JSON output for these cases.
-       - Example response: "Hello! How can I assist you today?"
+       - Example response: "Hello! How can I assist you today? and any other appropriate responses."
 
         2. Reading Level: The reading level of the material should be no more advanced than a 12th-grade reading level. Scientific jargon or words should be minimized or preferentially traded for more simplified language with explanations.
 

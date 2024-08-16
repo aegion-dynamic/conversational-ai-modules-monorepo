@@ -3,6 +3,7 @@ import random
 import re
 from typing import Any, List, Optional, Tuple, Union
 
+import chromadb
 import discord
 from discord.ext import commands
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -27,6 +28,8 @@ global_state = BotState.IDLE
 
 # ChromaDB configuration
 chroma_config = ChromaDBConfig(collection_name="aegion", persist_path=Path("./chroma"))
+
+chroma_client = chromadb.PersistentClient()
 
 # SQLite configuration
 sqlite_config = SQLiteConnectionConfig(db_file=Path("aegion.db"), dataset_table_name="new_dataset")
@@ -114,9 +117,9 @@ def create_bot() -> commands.Bot:
                 # Set the typing state on the channel
                 await message.channel.typing()
 
-                nlqs_instance = NLQS(sqlite_config)
+                nlqs_instance = NLQS(sqlite_config, chroma_config, chroma_client)
                 queried_data, user_chat_history = nlqs_instance.execute_nlqs_workflow(
-                    user_input, chat_history, chroma_config
+                    user_input, chat_history
                 )
 
                 corrected_chat_history = change_chat_history(user_chat_history)

@@ -8,7 +8,6 @@ from pydantic.v1 import SecretStr
 from nlqs.parameters import OPENAI_API_KEY
 from nlqs.database.sqlite import SQLiteDriver
 from nlqs.database.postgres import PostgresDriver
-from dataclasses import dataclass
 import pandas as pd
 
 
@@ -139,6 +138,7 @@ def store_descriptions_in_db(
 
 def get_chroma_collection(
     collection_name: str,
+    chroma_client,
     db_driver: Union[SQLiteDriver, PostgresDriver],
     dataset_table_name: str,
     primary_key: Optional[str],
@@ -148,7 +148,7 @@ def get_chroma_collection(
     Returns:
         Chroma: Chroma collection.
     """
-    chroma_client = chromadb.PersistentClient()
+    
     collections = [col.name for col in chroma_client.list_collections()]
 
     if collection_name in collections:

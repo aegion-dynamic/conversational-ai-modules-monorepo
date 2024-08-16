@@ -2,7 +2,6 @@ from nlqs.database.postgres import PostgresDriver, PostgresConnectionConfig
 from nlqs.database.sqlite import SQLiteDriver, SQLiteConnectionConfig
 import re
 from typing import Dict, List, Tuple, Union
-import chromadb
 from nlqs.description_generator import generate_column_description, get_chroma_collection
 
 
@@ -28,7 +27,7 @@ class ChromaDBConfig:
 
 class NLQS:
 
-    def __init__(self, connection_config: Union[SQLiteConnectionConfig, PostgresConnectionConfig]) -> None:
+    def __init__(self, connection_config: Union[SQLiteConnectionConfig, PostgresConnectionConfig], chroma_config: ChromaDBConfig, chroma_client) -> None:
         # TODO - Figure out what the constructor parameters are
         if isinstance(connection_config, SQLiteConnectionConfig):
             self.connection_driver = SQLiteDriver(connection_config)
@@ -44,6 +43,9 @@ class NLQS:
         # Create the llm object
         # Initializes the ChatOpenAI LLM model
         self.llm = ChatOpenAI(temperature=0, model="gpt-4-turbo", api_key=SecretStr(OPENAI_API_KEY), max_tokens=1000)
+
+        self.chroma_config = chroma_config
+        self.chroma_client = chroma_client
 
         # TODO - Figure out if we need to create introspection table, and create
         pass
@@ -70,7 +72,7 @@ class NLQS:
 
     # Step 4
     def execute_nlqs_workflow(
-        self, user_input: str, chat_history: List[Tuple[str, str]], chroma_config: ChromaDBConfig
+        self, user_input: str, chat_history: List[Tuple[str, str]]
     ) -> Tuple[str, List[Tuple[str, str]]]:
         """This function is where the whole interaction happens.
         It takes the user input and chat history as input and returns the response if the user's intent is either phatic_communication, profanity or sql_injection.
@@ -107,9 +109,11 @@ class NLQS:
         column_descriptions, numerical_columns, categorical_columns = self._create_introspection_table()
 
         primary_key = driver.get_primary_key(driver.db_config.dataset_table_name)
+
         # Chroma Collection
         chroma_collections = get_chroma_collection(
-            collection_name=chroma_config.collection_name,
+            collection_name=self.chroma_config.collection_name,
+            chroma_client=self.chroma_client,
             db_driver=driver,
             dataset_table_name=driver.db_config.dataset_table_name,
             primary_key=primary_key,
