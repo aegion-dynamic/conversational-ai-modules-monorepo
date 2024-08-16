@@ -140,7 +140,6 @@ def get_chroma_collection(
     collection_name: str,
     chroma_client,
     db_driver: Union[SQLiteDriver, PostgresDriver],
-    dataset_table_name: str,
     primary_key: Optional[str],
 ) -> chromadb.Collection:
     """Gets the chroma collection.
@@ -148,7 +147,7 @@ def get_chroma_collection(
     Returns:
         Chroma: Chroma collection.
     """
-    
+
     collections = [col.name for col in chroma_client.list_collections()]
 
     if collection_name in collections:
@@ -158,7 +157,7 @@ def get_chroma_collection(
         print(f"Collection '{collection_name}' does not exists, Creating new collection...")
         collection = chroma_client.create_collection(collection_name)
 
-        data = db_driver.fetch_data_from_database(dataset_table_name)
+        data = db_driver.fetch_data_from_database(db_driver.db_config.dataset_table_name)
 
         numerical_columns = data.select_dtypes(include=["int64", "float64"]).columns.tolist()
         categorical_columns = data.select_dtypes(include=["object"]).columns.tolist()

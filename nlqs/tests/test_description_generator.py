@@ -1,9 +1,12 @@
 from pathlib import Path
+import chromadb
 from nlqs.database.sqlite import SQLiteConnectionConfig
 from nlqs.description_generator import get_chroma_collection
 
 
 def test_get_chroma_collection(sqlite_driver):
+
+    chroma_client = chromadb.PersistentClient()
 
     sqlite_config = SQLiteConnectionConfig(db_file=Path("aegion.db"), dataset_table_name="new_dataset")
 
@@ -15,7 +18,7 @@ def test_get_chroma_collection(sqlite_driver):
 
     ret = get_chroma_collection(
         collection_name="test",
+        chroma_client=chroma_client,
         db_driver=db_driver,
-        dataset_table_name=sqlite_config.dataset_table_name,
         primary_key=primary_key,
     )

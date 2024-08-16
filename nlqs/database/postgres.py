@@ -175,9 +175,7 @@ class PostgresDriver(AbstractDriver):
         try:
             conn = self._db_connection
             query = f"SELECT * FROM {table_name}"
-            if conn is None:
-                raise ValueError("Database connection not established.")
-            df = pd.read_sql_query(query, conn)
+            df = pd.read_sql_query(query, conn) # type: ignore
             conn.close()
         except psycopg2.Error as e:
             logger.error(f"Error fetching data: {e}")

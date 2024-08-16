@@ -37,6 +37,9 @@ driver.connect()
 
 conn = driver._db_connection
 
+if conn is None:
+    raise ValueError("Database connection not established.")
+
 # Write the DataFrame to a SQLite table
 df.to_sql(driver.db_config.dataset_table_name, conn, if_exists="replace", index=False)
 

@@ -1,3 +1,4 @@
+import logging
 from nlqs.database.postgres import PostgresDriver, PostgresConnectionConfig
 from nlqs.database.sqlite import SQLiteDriver, SQLiteConnectionConfig
 import re
@@ -16,7 +17,25 @@ from pathlib import Path
 from langchain_openai import ChatOpenAI
 from pydantic.v1 import SecretStr
 from nlqs.parameters import OPENAI_API_KEY
+from discord_bot.parameters import LOGGER_FILE
 
+# Create a logger object
+logger = logging.getLogger(__name__)
+
+# Set the logging level (e.g., DEBUG, INFO, WARNING, ERROR)
+logger.setLevel(logging.INFO)
+
+# Create a file handler to save logs
+file_handler = logging.FileHandler(LOGGER_FILE)
+
+# Create a formatter to format the log messages
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
+# Add the formatter to the file handler
+file_handler.setFormatter(formatter)
+
+# Add the file handler to the logger
+logger.addHandler(file_handler)
 
 @dataclass
 class ChromaDBConfig:
@@ -115,7 +134,6 @@ class NLQS:
             collection_name=self.chroma_config.collection_name,
             chroma_client=self.chroma_client,
             db_driver=driver,
-            dataset_table_name=driver.db_config.dataset_table_name,
             primary_key=primary_key,
         )
 
@@ -154,6 +172,10 @@ class NLQS:
 
         intent = summarized_input.user_intent
 
+        logger.info("--------------------------")
+        logger.info(f"user input: {user_input}")
+        logger.info(f"Summarized input: {summarized_input}")
+
         if intent == "sql_injection" or intent == "profanity":
             response = ""
 
@@ -172,13 +194,18 @@ class NLQS:
                     dataset_table_name=driver.db_config.dataset_table_name,
                 )
 
+                logger.info(f"genenerted_query: {genenerted_query}")
+
                 # Step 10
                 if driver.validate_query(genenerted_query):
                     query_result = driver.execute_query(genenerted_query)
+                    logger.info(f"query_result: {query_result}")
 
                     # Step 11
                     if query_result == "No results found.":
                         query_result = similarity_search(chroma_collections, user_input)
+                        logger.info(f"similarity_result: {query_result}")
+
                     response = query_result
                 else:
                     response = "error while generating query. Please try again."
