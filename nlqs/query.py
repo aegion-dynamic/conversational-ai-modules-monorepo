@@ -80,14 +80,14 @@ def summarize(
         dict: {
             "summary": str,
             "quantitative_data": {
-                "column name": str,
-                "column name": str,
-                "column name": str,
+                "column name : str" : "Data mentioned about that column by the user : str",
+                "column name : str" : "Data mentioned about that column by the user : str",
+                "column name : str" : "Data mentioned about that column by the user : str",
             },
             "qualitative_data": {
-                "column name": str,
-                "column name": str,
-                "column name": str,
+                "column name : str" : "Data mentioned about that column by the user : str",
+                "column name : str" : "Data mentioned about that column by the user : str",
+                "column name : str" : "Data mentioned about that column by the user : str",
             },
             "user_requested_columns": list,
             "user_intent":str,
@@ -119,22 +119,23 @@ def summarize(
     7. Do not output any other information except the JSON. Do not add [OUT], [/OUT] to the output.(!important)
     
     The output JSON should have the following structure:
-
+    `
         "summary": "summary of the user input",
         "quantitative_data":
-                            " 
-                               "column name": "data mentioned in the user input",
-                               "column name": "data mentioned in the user input",
-                               "column name": "data mentioned in the user input",
-                             ",
+                            ` 
+                               "column name": "Data mentioned about that column by the user. Example- < 4",
+                               "column name": "Data mentioned about that column by the user. Example- > 6.215",
+                               "column name": "Data mentioned about that column by the user. Example- >= 3.14 or <= 2.718",
+                             `,
         "qualitative_data": 
-                            " 
-                               "column name": "data mentioned in the user input",
-                               "column name": "data mentioned in the user input",
-                               "column name": "data mentioned in the user input",
-                             ",
+                            ` 
+                               "column name": "Data mentioned about that column by the user",
+                               "column name": "Data mentioned about that column by the user",
+                               "column name": "Data mentioned about that column by the user",
+                             `,
         "user_requested_columns": "List of columns the user wants data from. If none, leave it as an empty list.",
         "user_intent": "The user's intent. If none, leave it as an empty string.",
+    `
     
     The data we have and chat history:
     User input: {user_input}\n\n 
@@ -175,6 +176,46 @@ def summarize(
 
     return summarized_input
 
+def generate_quantitaive_serach_query(quantitaive_data: Dict[str, str], table_name: str, primary_key: str) -> str:
+    """Creates an SQL query from a dictionary of quantitative data.
+
+    Args:
+        quantitaive_data (dict): A dictionary of quantitative data in the form {'column_name': 'condition'}.
+
+    Returns:
+        str: The generated SQL query.
+    """
+    if not quantitaive_data:
+        return ""  # Return an empty string if the dictionary is empty
+
+    query_parts = []
+    for column, condition in quantitaive_data.items():
+        # Handle different comparison operators
+        if "<" in condition:
+            operator = "<"
+        elif ">" in condition:
+            operator = ">"
+        elif "<=" in condition:
+            operator = "<="
+        elif ">=" in condition:
+            operator = ">="
+        elif "=" in condition:
+            operator = "="
+        else:
+            operator = "LIKE"  # Default to LIKE for other conditions
+
+        # Extract the value from the condition
+        value = condition.replace(operator, "").strip()
+
+        # Construct the query part
+        query_part = f"{column} {operator} {value}"
+        query_parts.append(query_part)
+
+    # Combine the query parts with AND
+    query_constraints = " AND ".join(query_parts)
+    
+    query = f"select {primary_key} form {table_name} where {query_constraints}"
+    return query
 
 # Function to perform a similarity search
 def similarity_search(collection: chromadb.Collection, user_input: str) -> str:

@@ -202,11 +202,11 @@ class NLQS:
                     logger.info(f"query_result: {query_result}")
 
                     # Step 11
-                    if query_result == "No results found.":
+                    if not query_result:
                         query_result = similarity_search(chroma_collections, user_input)
                         logger.info(f"similarity_result: {query_result}")
 
-                    response = query_result
+                    response = str(query_result)
                 else:
                     response = "error while generating query. Please try again."
             else:
