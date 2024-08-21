@@ -1,26 +1,17 @@
 import openai
-from typing import List
+from typing import List, Optional
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
 from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
 
 class ThoughtGenerator:
-    """
-    Generates thoughts for problem-solving using OpenAI's GPT model.
-    """
-
-    def __init__(self, api_key: str, thought_generation_prompt: str):
-        """
-        Initialize the ThoughtGenerator.
-
-        Args:
-            api_key (str): OpenAI API key.
-            thought_generation_prompt (str, optional): Custom prompt for thought generation.
-        """
+    def __init__(self, api_key: str, thought_generation_prompt: Optional[str] = None):
         self.api_key = api_key
         openai.api_key = self.api_key
-        
-        # Default thought generation prompt if not provided
-        self.thought_generation_prompt = thought_generation_prompt or """
+        self.thought_generation_prompt = thought_generation_prompt or self.default_thought_generation_prompt()
+
+    @staticmethod
+    def default_thought_generation_prompt():
+        return """
         Given the current state of the problem:
 
         {current_state}
@@ -35,27 +26,16 @@ class ThoughtGenerator:
         """
 
     def generate_thoughts(self, current_state: str, num_thoughts: int) -> List[str]:
-        """
-        Generate thoughts based on the current state.
-
-        Args:
-            current_state (str): The current state of the problem.
-            num_thoughts (int): Number of thoughts to generate.
-
-        Returns:
-            List[str]: List of generated thoughts.
-        """
         prompt = self.thought_generation_prompt.format(
             current_state=current_state,
             num_thoughts=num_thoughts
         )
         
         messages = [
-            ChatCompletionSystemMessageParam(role= "system", content= "You are a helpful assistant generating thoughts for problem-solving."),
-            ChatCompletionUserMessageParam(role="user", content= prompt)
+            ChatCompletionSystemMessageParam(role="system", content="You are a helpful assistant generating thoughts for problem-solving."),
+            ChatCompletionUserMessageParam(role="user", content=prompt)
         ]
         
-        # Call OpenAI API for thought generation
         response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=messages,
@@ -64,11 +44,10 @@ class ThoughtGenerator:
             temperature=0.7
         )
 
-        # Extract and process thoughts from the response
-        thoughts_text = response.choices[0].message.content #['content'].strip()
+        thoughts_text = response.choices[0].message.content
         if thoughts_text is not None:
             thoughts_text = thoughts_text.strip()
             thoughts = [thought.split('. ', 1)[1] for thought in thoughts_text.split('\n') if '. ' in thought]
-            return thoughts[:num_thoughts]  # Ensure we return exactly num_thoughts thoughts
+            return thoughts[:num_thoughts]
         else:
             raise Exception("No thoughts generated.")
