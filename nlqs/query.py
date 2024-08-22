@@ -214,8 +214,28 @@ def generate_quantitaive_serach_query(quantitaive_data: Dict[str, str], table_na
     # Combine the query parts with AND
     query_constraints = " AND ".join(query_parts)
     
-    query = f"select {primary_key} form {table_name} where {query_constraints}"
+    query = f"select {primary_key} from {table_name} where {query_constraints}"
     return query
+
+def qualitaive_search(collection: chromadb.Collection, data: Dict[str, str]) -> List[str]:
+    """Performs a similarity search on the database and returns all similar results.
+
+    Args:
+        collection (chromadb.Collection): The ChromaDB collection to search.
+        data (Dict[str, str]): A dictionary of qualitative data to search for.
+
+    Returns:
+        List[str]: A dictionary containing the search results.
+    """
+    results = []
+
+    for column, condition in data.items():
+        query_result = collection.query(query_texts=condition, n_results=3, where={"column_name": column})
+
+        if query_result:
+            results.extend(query_result["metadatas"])  # Assuming metadatas is a list of dictionaries
+
+    return results if results else []
 
 # Function to perform a similarity search
 def similarity_search(collection: chromadb.Collection, user_input: str) -> str:

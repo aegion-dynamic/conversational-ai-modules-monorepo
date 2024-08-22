@@ -15,6 +15,9 @@ import pandas as pd
 def get_column_descriptions(dataframe) -> dict:
     """Get column descriptions from OpenAI API."""
     # Initialize an empty dictionary to store column descriptions
+
+    print("Generating column descriptions...")
+
     descriptions = {}
 
     for column in dataframe.columns:
@@ -133,12 +136,12 @@ def store_descriptions_in_db(
         )
 
     conn.commit()
-    conn.close()
+    # conn.close()
 
 
 def get_chroma_collection(
     collection_name: str,
-    chroma_client,
+    client,
     db_driver: Union[SQLiteDriver, PostgresDriver],
     primary_key: Optional[str],
 ) -> chromadb.Collection:
@@ -148,46 +151,53 @@ def get_chroma_collection(
         Chroma: Chroma collection.
     """
 
-    collections = [col.name for col in chroma_client.list_collections()]
+    collections = [col.name for col in client.list_collections()]
 
     if collection_name in collections:
         print(f"Collection '{collection_name}' already exists, getting existing collection...")
-        chroma_collection = chroma_client.get_collection(collection_name)
+        chroma_collection = client.get_collection(collection_name)
     else:
         print(f"Collection '{collection_name}' does not exists, Creating new collection...")
-        collection = chroma_client.create_collection(collection_name)
+        collection = client.create_collection(collection_name)
 
         data = db_driver.fetch_data_from_database(db_driver.db_config.dataset_table_name)
 
-        numerical_columns = data.select_dtypes(include=["int64", "float64"]).columns.tolist()
         categorical_columns = data.select_dtypes(include=["object"]).columns.tolist()
 
         if data is None:
             raise ValueError("No data found in the database.")
 
-        # TODO - Modify this project specific stuff to work with the data driver
-
-        # TODO - Get column names from the database
-        data["combined_text"] = data[categorical_columns].apply(lambda x: " ".join(x.dropna().astype(str)), axis=1)
-        combined_text = data["combined_text"].tolist()
-        data["meta_data"] = data[numerical_columns].apply(lambda x: " ".join(x.dropna().astype(str)), axis=1)
-        metadata = data["meta_data"].tolist()
-
         if not primary_key:
             primary_key = data.columns[0]
 
-        # if the data type of the primary is int converting it into str coz chroma doesn't accept int as the primary key.
-        if data[primary_key].dtype == "int64":
-            data[primary_key] = data[primary_key].astype(str)
+        for index, row in data.iterrows():
+            # Extract the primary key value
+            pri_key = str(row[primary_key])
 
-        for text, pri_key, meta in zip(combined_text, data[primary_key], metadata):
-            chroma_collection = collection.add(
-                documents=text,
-                ids=pri_key,
-                metadatas={f"product details: {str(numerical_columns)} ": meta},
-            )
+            for column in categorical_columns:
+                # Extract the text for the current column and row
+                text = [str(row[column])]
 
-        chroma_collection = chroma_client.get_collection(collection_name)
+                # Create the ID for the current column and row
+                id = f"{column}_{pri_key}"
+
+                print(f"id: {id}")
+
+                # Create the metadata dictionary
+                meta = {
+                    "id": pri_key,
+                    "table_name": db_driver.db_config.dataset_table_name,
+                    "column_name": column,
+                }
+
+                # Add the data to the Chroma collection
+                chroma_collection = collection.add(
+                    documents=text,
+                    ids=id,
+                    metadatas=meta,
+                )
+
+        chroma_collection = client.get_collection(collection_name)
     return chroma_collection
 
 

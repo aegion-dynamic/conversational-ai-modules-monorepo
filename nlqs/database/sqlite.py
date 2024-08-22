@@ -43,28 +43,31 @@ class SQLiteDriver(AbstractDriver):
             self._db_connection.close()
             logger.info("Disconnected from SQLite database.")
 
-    def execute_query(self, query: str) -> str:
+    def execute_query(self, query: str) -> List[str]:
         """Executes the SQL query and returns the result.
 
         Args:
             query (str): the SQL query.
 
         Returns:
-            str: the result of the query.
+            List[str]: the result of the query.
         """
         if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
         try:
+            print(f"Executing query: {query}")
             self.cursor.execute(query)
             result = self.cursor.fetchall()
             self._db_connection.commit()
-            result_str = str(result)
-            logger.info(f"Query executed successfully: {result_str}")
-            return result_str if result else "No results found."
+            print(f"result: {result}")
+            print("--------------------")
+            logger.info(f"Query executed successfully: {result}")
+            return result if result else []
         except sqlite3.Error as e:
             error_message = f"Error executing SQL query: {e}"
             logger.error(error_message)
-            return error_message
+            raise e
+            # return error_message
 
     def retrieve_descriptions_and_types_from_db(self) -> Tuple[Dict[str, str], List[str], List[str]]:
         """Retrieves descriptions and types from the SQLite database.
@@ -194,46 +197,50 @@ class SQLiteDriver(AbstractDriver):
             if conn is None:
                 raise ValueError("Database connection not established.")
             df = pd.read_sql_query(query, conn)
-            conn.close()
+            # conn.close()
         except sqlite3.Error as e:
             print(f"Error fetching data: {e}")
             return pd.DataFrame()  # Return an empty DataFrame on error
 
         return df
     
-    def get_primary_key(self, table_name: str) -> Optional[str]:
+    import sqlite3
+
+    def get_primary_key(self, table_name: str) -> str:
         """
         Retrieves the primary key column name from a SQLite table.
 
         Args:
-            db_file (str): The path to the SQLite database file.
             table_name (str): The name of the table to check.
 
         Returns:
-            str: The name of the primary key column, or None if no primary key is found.
+            str: The name of the primary key column.
+
+        Raises:
+            ValueError: If the database connection is not established or
+                        if the table has no primary key.
+            sqlite3.Error: If there is an error executing the SQL command.
         """
         if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
 
         try:
-            conn = self._db_connection
-            cursor = conn.cursor()
+            self.cursor.execute(f"PRAGMA table_info({table_name})")
+            table_info = self.cursor.fetchall()
 
-            # Execute a query to get the primary key information
-            cursor.execute(f"PRAGMA table_info({table_name})")
-            table_info = cursor.fetchall()
+            primary_key_columns = [row[1] for row in table_info if row[5] == 1]
 
-            # Iterate through the table information to find the primary key
-            for row in table_info:
-                if row[5] == 1:  # Check if the 'pk' column is set to 1 (indicating primary key)
-                    return row[1]  # Return the column name
+            if len(primary_key_columns) == 0:
+                raise ValueError(f"No primary key found in the table '{table_name}'.")
 
-            # If no primary key is found, return None
-            return None
+            if len(primary_key_columns) > 1:
+                raise ValueError(f"Multiple primary keys found in the table '{table_name}'.")
+
+            return primary_key_columns[0]
 
         except sqlite3.Error as e:
-            print(f"Error getting primary key: {e}")
-            return None
+            raise sqlite3.Error(f"Error getting primary key from table '{table_name}': {e}")
+
 
     @property
     def db_connection(self) -> sqlite3.Connection:

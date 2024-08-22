@@ -55,7 +55,7 @@ def execute_query(query: str) -> List[str]:
         query (str): the SQL query.
 
     Returns:
-        str: the result of the query.
+        List[str]: the result of the query.
     """
     try:
         connnection = sqlite3.connect("aegion.db")
@@ -70,7 +70,8 @@ def execute_query(query: str) -> List[str]:
     except sqlite3.Error as e:
         error_message = f"Error executing SQL query: {e}"
         # logger.error(error_message)
-        return []
+        raise e
+        # return []
     
 def get_chroma_collection(
     collection_name: str,
@@ -101,13 +102,8 @@ def get_chroma_collection(
         if data is None:
             raise ValueError("No data found in the database.")
 
-        
         if not primary_key:
             primary_key = data.columns[0]
-
-        # if the data type of the primary is int converting it into str coz chroma doesn't accept int as the primary key.
-        if data[primary_key].dtype == "int64":
-            data[primary_key] = data[primary_key].astype(str)
 
         for index, row in data.iterrows():
             # Extract the primary key value
@@ -198,3 +194,6 @@ intersection_ids = list(set(quantitative_ids) & set(qualitative_ids))
 
 print(intersection_ids)
 
+if __name__ == "__main__":
+    result = execute_query("Show me the products for nausea relief with a rating of grater than 9.")
+    print(result)

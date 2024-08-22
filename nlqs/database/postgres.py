@@ -65,28 +65,31 @@ class PostgresDriver(AbstractDriver):
             self._db_connection.close()
             logger.info("Disconnected from PostgreSQL database.")
 
-    def execute_query(self, query: str) -> str:
+    def execute_query(self, query: str) -> List[str]:
         """Executes the SQL query and returns the result.
 
         Args:
             query (str): the SQL query.
 
         Returns:
-            str: the result of the query.
+            List[str]: the result of the query.
         """
         if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
         try:
+            print(f"Executing query: {query}")
             self.cursor.execute(query)
             result = self.cursor.fetchall()
             self._db_connection.commit()
-            result_str = str(result)
-            logger.info(f"Query executed successfully: {result_str}")
-            return result_str if result else "No results found."
+            print(f"result: {result}")
+            print("--------------------")
+            logger.info(f"Query executed successfully: {result}")
+            return result if result else []
         except psycopg2.Error as e:
             error_message = f"Error executing SQL query: {e}"
             logger.error(error_message)
             raise e
+            # return error_message
 
     def retrieve_descriptions_and_types_from_db(self) -> Tuple[Dict[str, str], List[str], List[str]]:
         """Retrieves descriptions and types from the PostgreSQL database.
@@ -167,7 +170,7 @@ class PostgresDriver(AbstractDriver):
             db_file (Path): Path to the PostgreSQL database file.
             table_name (str): Name of the table to fetch data from.
 
-        Returns:
+        Returns:get_primary_key
             pd.DataFrame: A DataFrame containing the data from the table, or None if an error occurred.
         """
         if self.cursor is None or self._db_connection is None:
@@ -183,39 +186,34 @@ class PostgresDriver(AbstractDriver):
             
         return df
     
-    def get_primary_key(self, table_name: str) -> Optional[str]:
-            """
-            Retrieves the primary key column name from a SQLite table.
+    def get_primary_key(self, table_name: str) -> str:
+        """
+        Retrieves the primary key column name from a SQLite table.
 
-            Args:
-                db_file (str): The path to the SQLite database file.
-                table_name (str): The name of the table to check.
+        Args:
+            table_name (str): The name of the table to check.
 
-            Returns:
-                str: The name of the primary key column, or None if no primary key is found.
-            """
-            if self.cursor is None or self._db_connection is None:
-                raise ValueError("Database connection not established.")
+        Returns:
+            primary key (str): The name of the primary key column, 
+                           or None if no primary key is found.
+        """
+        if self.cursor is None or self._db_connection is None:
+            raise ValueError("Database connection not established.")
 
-            try:
-                conn = self._db_connection
-                cursor = conn.cursor()
+        try:
+            self.cursor.execute(f"PRAGMA table_info({table_name})")
+            table_info = self.cursor.fetchall()
 
-                # Execute a query to get the primary key information
-                cursor.execute(f"PRAGMA table_info({table_name})")
-                table_info = cursor.fetchall()
+            for row in table_info:
+                if row[5] == 1:  # Check for primary key indicator
+                    return row[1]  # Return the column name
 
-                # Iterate through the table information to find the primary key
-                for row in table_info:
-                    if row[5] == 1:  # Check if the 'pk' column is set to 1 (indicating primary key)
-                        return row[1]  # Return the column name
+            # No primary key found
+            raise ValueError("No primary key found in the database.")
 
-                # If no primary key is found, return None
-                return None
-
-            except psycopg2.Error as e:
-                print(f"Error getting primary key: {e}")
-                return None
+        except psycopg2.Error as e:
+            print(f"Error getting primary key: {e}")
+            raise e
 
     @property
     def db_connection(self):

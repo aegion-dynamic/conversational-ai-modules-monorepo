@@ -6,9 +6,10 @@ from typing import Dict, List, Tuple, Union
 from nlqs.description_generator import generate_column_description, get_chroma_collection
 
 
-from nlqs.database.sqlite import SQLiteDriver
 from nlqs.query import (
+    generate_quantitaive_serach_query,
     generate_query,
+    qualitaive_search,
     similarity_search,
     summarize,
 )
@@ -132,7 +133,7 @@ class NLQS:
         # Chroma Collection
         chroma_collections = get_chroma_collection(
             collection_name=self.chroma_config.collection_name,
-            chroma_client=self.chroma_client,
+            client=self.chroma_client,
             db_driver=driver,
             primary_key=primary_key,
         )
@@ -176,39 +177,78 @@ class NLQS:
         logger.info(f"user input: {user_input}")
         logger.info(f"Summarized input: {summarized_input}")
 
-        if intent == "sql_injection" or intent == "profanity":
+        if intent == "sql_injection":
             response = ""
 
         else:
+            print("checking for user requested columns...")
             if summarized_input.user_requested_columns:
 
+                quantitaive_data = summarized_input.quantitative_data
+                qualitative_data = summarized_input.qualitative_data
+
+
+                quantitaive_query = generate_quantitaive_serach_query(quantitaive_data, "new_dataset", primary_key)
+                # print(f"quantitaive_query: {quantitaive_query}")
+                quantitative_ids_uncleaned = driver.execute_query(quantitaive_query)
+
+                quantitative_ids = [item[0] for item in quantitative_ids_uncleaned]
+
+                print(f"quantitative_ids: {quantitative_ids}")
+
+                qualitaive_results = qualitaive_search(chroma_collections, qualitative_data)
+
+                qualitative_ids = []
+                for result in qualitaive_results:
+                    for item in result:
+                        qualitative_ids.append(int(item.get(primary_key)))
+                
+                print(f"qualitative_ids: {qualitative_ids}")
+
+
                 # Step 9
-                genenerted_query = generate_query(
-                    user_input=user_input,
-                    summarized_input=summarized_input,
-                    chat_history=chat_history,
-                    column_descriptions=column_descriptions,
-                    numerical_columns=numerical_columns,
-                    categorical_columns=categorical_columns,
-                    llm=self.llm,
-                    dataset_table_name=driver.db_config.dataset_table_name,
-                )
+                # genenerted_query = generate_query(
+                #     user_input=user_input,
+                #     summarized_input=summarized_input,
+                #     chat_history=chat_history,
+                #     column_descriptions=column_descriptions,
+                #     numerical_columns=numerical_columns,
+                #     categorical_columns=categorical_columns,
+                #     llm=self.llm,
+                #     dataset_table_name=driver.db_config.dataset_table_name,
+                # )
 
-                logger.info(f"genenerted_query: {genenerted_query}")
+                # logger.info(f"genenerted_query: {genenerted_query}")
 
-                # Step 10
-                if driver.validate_query(genenerted_query):
-                    query_result = driver.execute_query(genenerted_query)
-                    logger.info(f"query_result: {query_result}")
+                # # Step 10
+                # if driver.validate_query(genenerted_query):
+                #     query_result = driver.execute_query(genenerted_query)
+                #     logger.info(f"query_result: {query_result}")
 
-                    # Step 11
-                    if not query_result:
-                        query_result = similarity_search(chroma_collections, user_input)
-                        logger.info(f"similarity_result: {query_result}")
+                #     # Step 11
+                #     if not query_result:
+                #         query_result = similarity_search(chroma_collections, user_input)
+                #         logger.info(f"similarity_result: {query_result}")
 
-                    response = str(query_result)
+                #     response = str(query_result)
+                # else:
+                #     response = "error while generating query. Please try again."
+
+                # Find the intersection of quantitative_ids and qualitative_ids
+                if not quantitative_ids:
+                    intersection_ids = qualitative_ids
+                elif not qualitative_ids:
+                    intersection_ids = quantitative_ids
                 else:
-                    response = "error while generating query. Please try again."
+                    intersection_ids = list(set(quantitative_ids) & set(qualitative_ids))
+
+                print(intersection_ids)
+
+                final_query = f"select * from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
+            
+                response = str(driver.execute_query(final_query))
+                logger.info(f"response: {response}")
+
             else:
                 response = ""
 
