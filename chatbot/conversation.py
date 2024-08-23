@@ -137,7 +137,7 @@ class Chatbot:
     def initialize_qachain(self) -> None:
         """Initializes the QA Chain"""
 
-        llm = ChatOpenAI(api_key=SecretStr(OPENAI_API_KEY), temperature=0.9, model="gpt-4")
+        llm = ChatOpenAI(api_key=SecretStr(OPENAI_API_KEY), temperature=0.6, model="gpt-4", verbose=True, max_tokens=1500)
 
         self.qachain = RetrievalQA.from_chain_type(
             llm=llm,

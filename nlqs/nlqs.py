@@ -9,7 +9,7 @@ from nlqs.description_generator import generate_column_description, get_chroma_c
 from nlqs.query import (
     generate_quantitaive_serach_query,
     generate_query,
-    qualitaive_search,
+    qualitative_search,
     similarity_search,
     summarize,
 )
@@ -196,12 +196,12 @@ class NLQS:
 
                 print(f"quantitative_ids: {quantitative_ids}")
 
-                qualitaive_results = qualitaive_search(chroma_collections, qualitative_data)
+                qualitative_ids = qualitative_search(chroma_collections, qualitative_data, primary_key)
 
-                qualitative_ids = []
-                for result in qualitaive_results:
-                    for item in result:
-                        qualitative_ids.append(int(item.get(primary_key)))
+                # qualitative_ids = []
+                # for result in qualitaive_results:
+                #     for item in result:
+                #         qualitative_ids.append(int(item.get(primary_key)))
                 
                 print(f"qualitative_ids: {qualitative_ids}")
 
@@ -244,10 +244,20 @@ class NLQS:
 
                 print(intersection_ids)
 
-                final_query = f"select * from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
             
-                response = str(driver.execute_query(final_query))
-                logger.info(f"response: {response}")
+                final_query = f"select * from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
+
+                columns_database = driver.database_columns()
+
+                data_retreived = str(driver.execute_query(final_query))
+
+                response = f"{columns_database}\n\n{data_retreived}"
+
+                # final_query = f"select {', '.join(summarized_input.user_requested_columns)} from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
+                #  data_retreived = str(driver.execute_query(final_query))
+                #  response = f"{summarized_input.user_requested_columns}\n\n{data_retreived}"
+
+                logger.info(f"response: {data_retreived}")
 
             else:
                 response = ""

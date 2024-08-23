@@ -119,6 +119,17 @@ class PostgresDriver(AbstractDriver):
         except psycopg2.Error as e:
             logger.error(f"Error retrieving descriptions and types: {e}")
             return {}, [], []
+        
+    def database_columns(self) -> list[str]:
+        if self.cursor is None or self._db_connection is None:
+            raise ValueError("Database connection not established.")
+        try:
+            self.cursor.execute("SELECT column_name FROM column_types")
+            columns = self.cursor.fetchall()
+            return columns
+        except psycopg2.Error as e:
+            logger.error(f"Error retrieving columns: {e}")
+            return []
 
     def validate_query(self, query: str) -> bool:
         """Validates the generated SQL query against the database schema and returns True if valid, False otherwise.

@@ -2,7 +2,7 @@ import json
 import logging
 from dataclasses import dataclass
 import re
-from typing import Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from langchain.chains import LLMChain
 from langchain.memory import ConversationBufferMemory
@@ -217,12 +217,13 @@ def generate_quantitaive_serach_query(quantitaive_data: Dict[str, str], table_na
     query = f"select {primary_key} from {table_name} where {query_constraints}"
     return query
 
-def qualitaive_search(collection: chromadb.Collection, data: Dict[str, str]) -> List[str]:
+def qualitative_search(collection: chromadb.Collection, data: Dict[str, str], primary_key: str) -> List[int]:
     """Performs a similarity search on the database and returns all similar results.
 
     Args:
         collection (chromadb.Collection): The ChromaDB collection to search.
         data (Dict[str, str]): A dictionary of qualitative data to search for.
+        primary_key (str): The primary key column name in the database.
 
     Returns:
         List[str]: A dictionary containing the search results.
@@ -230,12 +231,48 @@ def qualitaive_search(collection: chromadb.Collection, data: Dict[str, str]) -> 
     results = []
 
     for column, condition in data.items():
-        query_result = collection.query(query_texts=condition, n_results=3, where={"column_name": column})
+        query_result = collection.query(query_texts=condition, n_results=5, where={"column_name": column})
 
         if query_result:
             results.extend(query_result["metadatas"])  # Assuming metadatas is a list of dictionaries
 
-    return results if results else []
+        ids = []
+        for result in results:
+            for item in result:
+                ids.append(int(item.get(primary_key)))
+
+        return ids
+
+# def qualitaive_search(collection: chromadb.Collection, data: Dict[str, str], primary_key: str) -> List[str]:
+#     """Performs a similarity search on the database and returns all similar results.
+
+#     Args:
+#         collection (chromadb.Collection): The ChromaDB collection to search.
+#         data (Dict[str, str]): A dictionary of qualitative data to search for.
+#         primary_key (str): The primary key column name in the database.
+
+#     Returns:
+#         List[str]: A dictionary containing the search results.
+#     """
+#     all_ids = []
+
+#     for column, condition in data.items():
+#         query_result = collection.query(query_texts=condition, n_results=10, where={"column_name": column})
+
+#         if query_result:
+#             ids_for_column = set()  # Use a set to store unique IDs for this column
+#             for result in query_result["metadatas"]:
+#                 for item in result:
+#                     id_value = item.get(primary_key)
+#                     if id_value is not None:
+#                         ids_for_column.add(str(id_value))  # Convert to string for comparison
+#             all_ids.append(ids_for_column)
+
+#     # Find the intersection of IDs across all columns
+#     common_ids = set.intersection(*all_ids) if all_ids else set()
+
+#     return list(common_ids)
+
 
 # Function to perform a similarity search
 def similarity_search(collection: chromadb.Collection, user_input: str) -> str:

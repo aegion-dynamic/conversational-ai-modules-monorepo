@@ -65,10 +65,12 @@ def execute_query(query: str) -> List[str]:
         connnection.commit()
         # result_str = str(result)
         # logger.info(f"Query executed successfully: {result_str}")
-        result_list = [item[0] for item in result]
-        return result_list if result_list else []
+        # result_list = [item[0] for item in result]
+        # return result_list if result_list else []
+        return result if result else []
     except sqlite3.Error as e:
         error_message = f"Error executing SQL query: {e}"
+        print(error_message)
         # logger.error(error_message)
         raise e
         # return []
@@ -154,13 +156,18 @@ def qualitaive_search(collection: chromadb.Collection, data: Dict[str, str]) -> 
     return results if results else []
 
 
-quantitaive_data = {'CustomerRating': '= 9'}
+# quantitaive_data = {'CustomerRating': '= 9'}
+quantitaive_data = {}
 
-query = generate_quantitaive_serach_query(quantitaive_data, "new_dataset", "id")
-print(query)
+quantitaive_query = generate_quantitaive_serach_query(quantitaive_data, "new_dataset", "id")
+print(quantitaive_query)
 
-quantitative_ids = execute_query(query)
-print(quantitative_ids)
+quantitative_ids_uncleaned = execute_query(quantitaive_query)
+
+quantitative_ids = [item[0] for item in quantitative_ids_uncleaned]
+
+print(f"quantitative_ids: {quantitative_ids}")
+
 
 
 chroma_client = chromadb.PersistentClient()
@@ -171,10 +178,10 @@ connection_driver = SQLiteDriver(sqlite_config)
 connection_driver.connect()
 
 
-collections = get_chroma_collection("my_test_collection", chroma_client, connection_driver, "id")
+collections = get_chroma_collection("aegion", chroma_client, connection_driver, "id")
 
 
-qualitative_data= {'Product': 'Blush Hand Pipe', 'MedicalBenefitsReported': 'benefits'}
+qualitative_data= {'Product': 'Puffco Peak Pro', 'MedicalBenefitsReported': 'User is asking about the medical benefits.'}
 
 results = qualitaive_search(collections, qualitative_data)
 
@@ -190,10 +197,22 @@ for result in results:
 print(qualitative_ids)
 
 # Find the intersection of quantitative_ids and qualitative_ids
-intersection_ids = list(set(quantitative_ids) & set(qualitative_ids))
+if not quantitative_ids:
+    intersection_ids = qualitative_ids
+elif not qualitative_ids:
+    intersection_ids = quantitative_ids
+else:
+    intersection_ids = list(set(quantitative_ids) & set(qualitative_ids))
 
 print(intersection_ids)
 
-if __name__ == "__main__":
-    result = execute_query("Show me the products for nausea relief with a rating of grater than 9.")
-    print(result)
+final_query = f"select * from new_dataset where id in ({','.join(str(id) for id in intersection_ids)})"
+
+final_result = execute_query(final_query)
+
+print(f"final result: {final_result}")
+
+
+# if __name__ == "__main__":
+#     result = execute_query("Show me the products for nausea relief with a rating of grater than 9.")
+#     print(result)
