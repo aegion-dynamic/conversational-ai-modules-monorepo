@@ -93,17 +93,17 @@ class NLQS:
     # Step 4
     def execute_nlqs_workflow(
         self, user_input: str, chat_history: List[Tuple[str, str]]
-    ) -> Tuple[str, List[Tuple[str, str]]]:
+    ) -> str:
         """This function is where the whole interaction happens.
         It takes the user input and chat history as input and returns the response if the user's intent is either phatic_communication, profanity or sql_injection.
-        Else it returns the query result or search similarity result and the updated chat history.
+        Else it returns the query result or search similarity result.
 
         Args:
             user_input (str): The user's input.
             chat_history (list[(str, str)]): The chat history.
 
         Returns:
-            Tuple[str,List[Tuple[str, str]]]: The response and the updated chat history.
+            str: The response 
         """
 
         # Overview
@@ -188,7 +188,7 @@ class NLQS:
                 qualitative_data = summarized_input.qualitative_data
 
 
-                quantitaive_query = generate_quantitaive_serach_query(quantitaive_data, "new_dataset", primary_key)
+                quantitaive_query = generate_quantitaive_serach_query(quantitaive_data, driver.db_config.dataset_table_name, primary_key)
                 # print(f"quantitaive_query: {quantitaive_query}")
                 quantitative_ids_uncleaned = driver.execute_query(quantitaive_query)
 
@@ -245,22 +245,22 @@ class NLQS:
                 print(intersection_ids)
 
             
-                final_query = f"select * from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
+                # final_query = f"select * from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
 
-                columns_database = driver.database_columns()
+                # columns_database = driver.database_columns()
 
+                # data_retreived = str(driver.execute_query(final_query))
+
+                # response = f"{columns_database}\n\n{data_retreived}"
+
+                final_query = f"select {', '.join(summarized_input.user_requested_columns)} from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
                 data_retreived = str(driver.execute_query(final_query))
-
-                response = f"{columns_database}\n\n{data_retreived}"
-
-                # final_query = f"select {', '.join(summarized_input.user_requested_columns)} from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
-                #  data_retreived = str(driver.execute_query(final_query))
-                #  response = f"{summarized_input.user_requested_columns}\n\n{data_retreived}"
+                response = f"{summarized_input.user_requested_columns}\n\n{data_retreived}"
 
                 logger.info(f"response: {data_retreived}")
 
             else:
                 response = ""
 
-        chat_history.append((user_input, response))
-        return response, chat_history
+        # chat_history.append((user_input, response))
+        return response

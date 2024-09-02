@@ -19,11 +19,11 @@ chroma_client = chromadb.PersistentClient("../chroma")
 # SQLite configuration
 sqlite_config = SQLiteConnectionConfig(db_file=Path("../aegion.db"), dataset_table_name="new_dataset")
 
-driver = SQLiteDriver(sqlite_config)
+# driver = SQLiteDriver(sqlite_config)
 
-driver.connect()
+# driver.connect()
 
-primary_key = driver.get_primary_key(driver.db_config.dataset_table_name)
+# primary_key = driver.get_primary_key(driver.db_config.dataset_table_name)
 
 # Gradio interface
 with gr.Blocks(title="LUNA Chatbot") as demo:

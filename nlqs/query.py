@@ -3,7 +3,8 @@ import logging
 from dataclasses import dataclass
 import re
 from typing import Any, Dict, List, Optional, Tuple, Union
-
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 from langchain.chains import LLMChain
 from langchain.memory import ConversationBufferMemory
 from langchain_core.prompts import PromptTemplate
@@ -96,65 +97,73 @@ def summarize(
 
     column_descriptions = list(column_descriptions_dictionary.items())
 
-    # Summarize the user input
-    instruction = f"""
-    You will receive a user input and the chat history. Your task is to:
-    
-    1. **Single-Word Queries**: If the user input is a single word or very short (e.g., one or two words), provide a direct response if possible. If the query is unclear, prompt the user to elaborate.
-       - Example response: "It seems you're asking about something specific. Could you provide more details?"
+    prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            f"""
+                You will receive a user input and the chat history. Your task is to:
+                
+                1. **Single-Word Queries**: If the user input is a single word or very short (e.g., one or two words), provide a direct response if possible. If the query is unclear, prompt the user to elaborate.
+                - Example response: "It seems you're asking about something specific. Could you provide more details?"
 
-    2. **Structured Analysis**: For all other inputs, analyze the user input and identify key details based on our available data and chat history.
-    
-    3. Summarize the input, classifying the data into qualitative and quantitative categories.
-    
-    4. Identify relevant columns from which we can provide an answer. Pay close attention to the user's intent and specific mentions of data columns:
-       - Are they seeking information about products, medications, treatments, or other relevant categories?
-       - If the user is seeking information about a product, also provide the URL of the product if available.
-       - Look for explicit mentions of column names, synonyms, or phrases that indicate the type of information requested. If the user specifies certain attributes or metrics, consider these as user-requested columns.
+                2. **Structured Analysis**: For all other inputs, analyze the user input and identify key details based on our available data and chat history.
+                
+                3. Summarize the input, classifying the data into qualitative and quantitative categories.
+                
+                4. Identify relevant columns from which we can provide an answer. Pay close attention to the user's intent and specific mentions of data columns:
+                - Are they seeking information about products, medications, treatments, or other relevant categories?
+                - If the user is seeking information about a product, also provide the URL of the product if available.
+                - Look for explicit mentions of column names, synonyms, or phrases that indicate the type of information requested. If the user specifies certain attributes or metrics, consider these as user-requested columns.
 
-    5. Classify the user's intent. Possible intents include: phatic_communication, sql_injection, profanity, and other.
+                5. Classify the user's intent. Possible intents include: phatic_communication, sql_injection, profanity, and other.
 
-    6. Output the result in a JSON format.
+                6. Output the result in a JSON format.
 
-    7. Do not output any other information except the JSON. Do not add [OUT], [/OUT] to the output.(!important)
-    
-    The output JSON should have the following structure:
-    `
-        "summary": "summary of the user input",
-        "quantitative_data":
-                            ` 
-                               "column name": "Data mentioned about that column by the user. Example- < 4",
-                               "column name": "Data mentioned about that column by the user. Example- > 6.215",
-                               "column name": "Data mentioned about that column by the user. Example- >= 3.14 or <= 2.718",
-                             `,
-        "qualitative_data": 
-                            ` 
-                               "column name": "Data mentioned about that column by the user",
-                               "column name": "Data mentioned about that column by the user",
-                               "column name": "Data mentioned about that column by the user",
-                             `,
-        "user_requested_columns": "List of columns the user wants data from. If none, leave it as an empty list.",
-        "user_intent": "The user's intent. If none, leave it as an empty string.",
-    `
-    
-    The data we have and chat history:
-    User input: {user_input}\n\n 
-    Data:{column_descriptions}\n\n 
-    numerical columns in the data: {numerical_columns}\n\n 
-    descriptive columns in the data: {categorical_columns}\n\n 
-    Chat history: {chat_history}
+                7. Do not output any other information except the JSON. Do not add [OUT], [/OUT] to the output.(!important)
+                
+                The output JSON should have the following structure:
+                `
+                    "summary": "summary of the user input",
+                    "quantitative_data":
+                                        ` 
+                                        "column name": "Data mentioned about that column by the user. Example- < 4",
+                                        "column name": "Data mentioned about that column by the user. Example- > 6.215",
+                                        "column name": "Data mentioned about that column by the user. Example- >= 3.14 or <= 2.718",
+                                        `,
+                    "qualitative_data": 
+                                        ` 
+                                        "column name": "Data mentioned about that column by the user",
+                                        "column name": "Data mentioned about that column by the user",
+                                        "column name": "Data mentioned about that column by the user",
+                                        `,
+                    "user_requested_columns": "List of columns the user wants data from. If none, leave it as an empty list. Always add product and url to this column.",
+                    "user_intent": "The user's intent. If none, leave it as an empty string.",
+                `
+                
+                The data we have and chat history:
+                Data:{column_descriptions}\n\n 
+                numerical columns in the data: {numerical_columns}\n\n 
+                descriptive columns in the data: {categorical_columns}\n\n 
+                chat history: {chat_history}
 
-    Now, summarize the user input and provide the structured output in JSON format.
-    """
+                Now, summarize the user input and provide the structured output in JSON format.
+                """,
+        ),
+        ("human", f"{user_input}"),
+    ]
+    )
 
-    system_prompt = "You are an expert in summarization and expressing key ideas succinctly."
-    prompt = get_prompt(instruction, system_prompt)
-    prompt_template = PromptTemplate(template=prompt, input_variables=["chat_history", "user_input"])
-    memory = ConversationBufferMemory(memory_key="chat_history")
+    # print(f"prompt: {prompt}")
+    output_parser = StrOutputParser()
+    chain = prompt | llm | output_parser
 
-    llm_chain = LLMChain(llm=llm, prompt=prompt_template, verbose=True, memory=memory)
+    summarized_input_str = str(chain.invoke({"user_input": user_input}))
 
-    summarized_input_str = llm_chain.run({"chat_history": chat_history, "user_input": user_input})
+    print(f"summarized_input_str: {summarized_input_str}")
+
+    print("------------------------------------------------------------------------")
+
     try:
         # Attempt to parse the summarized input as JSON
         summarized_input_dict = json.loads(summarized_input_str)
@@ -218,7 +227,7 @@ def generate_quantitaive_serach_query(quantitaive_data: Dict[str, str], table_na
     return query
 
 def qualitative_search(collection: chromadb.Collection, data: Dict[str, str], primary_key: str) -> List[int]:
-    """Performs a similarity search on the database and returns all similar results.
+    """Performs a similarity search on the database and returns up to 5 similar results per column.
 
     Args:
         collection (chromadb.Collection): The ChromaDB collection to search.
@@ -226,22 +235,28 @@ def qualitative_search(collection: chromadb.Collection, data: Dict[str, str], pr
         primary_key (str): The primary key column name in the database.
 
     Returns:
-        List[str]: A dictionary containing the search results.
+        List[int]: A list of unique IDs from the search results.
     """
-    results = []
+    ids_per_column = {}  
 
     for column, condition in data.items():
         query_result = collection.query(query_texts=condition, n_results=5, where={"column_name": column})
 
         if query_result:
-            results.extend(query_result["metadatas"])  # Assuming metadatas is a list of dictionaries
+            ids_for_column = set()
+            for result in query_result["metadatas"]:
+                for item in result:
+                    id_value = item.get(primary_key)
+                    if id_value is not None:
+                        ids_for_column.add(int(id_value)) 
+            ids_per_column[column] = list(ids_for_column)
 
-        ids = []
-        for result in results:
-            for item in result:
-                ids.append(int(item.get(primary_key)))
+    print(f"ids_per_column: {ids_per_column}")
 
-        return ids
+    # Flatten the list of lists into a single list of unique IDs
+    all_ids = list(set([id_val for sublist in ids_per_column.values() for id_val in sublist])) 
+    return all_ids
+
 
 # def qualitaive_search(collection: chromadb.Collection, data: Dict[str, str], primary_key: str) -> List[str]:
 #     """Performs a similarity search on the database and returns all similar results.

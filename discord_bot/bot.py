@@ -7,6 +7,7 @@ import chromadb
 import discord
 from discord.ext import commands
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from discord_bot.parameters import CHROMA_COLLECTION_NAME, SQL_TABLE_NAME, SQLITE_DB_FILE
 from nlqs.database.sqlite import SQLiteConnectionConfig
 
 import discord_bot.memory as memory
@@ -27,12 +28,12 @@ global_state = BotState.IDLE
 
 
 # ChromaDB configuration
-chroma_config = ChromaDBConfig(collection_name="aegion", persist_path=Path("./chroma"))
+chroma_config = ChromaDBConfig(collection_name=CHROMA_COLLECTION_NAME, persist_path=Path("./chroma"))
 
 chroma_client = chromadb.PersistentClient()
 
 # SQLite configuration
-sqlite_config = SQLiteConnectionConfig(db_file=Path("aegion.db"), dataset_table_name="new_dataset")
+sqlite_config = SQLiteConnectionConfig(db_file=Path(SQLITE_DB_FILE), dataset_table_name=SQL_TABLE_NAME)
 
 
 def create_bot() -> commands.Bot:
@@ -118,11 +119,11 @@ def create_bot() -> commands.Bot:
                 await message.channel.typing()
 
                 nlqs_instance = NLQS(sqlite_config, chroma_config, chroma_client)
-                queried_data, user_chat_history = nlqs_instance.execute_nlqs_workflow(
+                queried_data = nlqs_instance.execute_nlqs_workflow(
                     user_input, chat_history
                 )
 
-                corrected_chat_history = change_chat_history(user_chat_history)
+                corrected_chat_history = change_chat_history(chat_history)
 
                 if queried_data is None:
                     print("ERROR - Summarization failed")
@@ -134,6 +135,7 @@ def create_bot() -> commands.Bot:
                 reply = chatbot_instance.converse(
                     user_input=updated_user_input, previous_messages=corrected_chat_history
                 )
+                chat_history.append((user_input, reply[0]))
                 reply = f"<@{user_id}> " + reply[0]
 
                 await message.channel.send(reply)

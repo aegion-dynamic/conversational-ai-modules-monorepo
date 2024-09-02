@@ -4,7 +4,8 @@ from langchain.chains import LLMChain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic.v1 import SecretStr
-
+import re
+from langchain_core.output_parsers import StrOutputParser
 from nlqs.parameters import OPENAI_API_KEY
 from nlqs.database.sqlite import SQLiteDriver
 from nlqs.database.postgres import PostgresDriver
@@ -24,15 +25,18 @@ def get_column_descriptions(dataframe) -> dict:
         # Get column data
         col_data = dataframe[column]
         col_type = col_data.dtype
-        sample_data = dataframe[column].dropna().sample(min(5, len(dataframe[column]))).tolist()
+        sample_data = (
+            dataframe[column].dropna().sample(min(5, len(dataframe[column]))).tolist()
+        )
         sample_data_str = ", ".join(map(str, sample_data))
+        sample_data_str = re.sub("{|}", "", sample_data_str)
 
         # Prepare the prompt
         prompt = ChatPromptTemplate.from_messages(
             [
                 (
                     "system",
-                    f"""
+                    """
                 The following is a description of a dataset column:
                 Column Name: {column}
                 Data Type: {col_type}
@@ -63,10 +67,18 @@ def get_column_descriptions(dataframe) -> dict:
             verbose=True,
         )
 
-        chain = LLMChain(prompt=prompt, llm=llm)
+        output_parser = StrOutputParser()
+        chain = prompt | llm | output_parser
 
         # Generate the description
-        response = chain.run("Please provide a detailed description of each column in the given dataset.")
+        response = chain.invoke(
+            {
+                "column": column,
+                "col_type": col_type,
+                "sample_data_str": sample_data_str,
+                "user_input": "Please provide a detailed description of each column in the given dataset.",
+            }
+        )
 
         # Extract the description from the response
         description = response.strip()
@@ -76,6 +88,7 @@ def get_column_descriptions(dataframe) -> dict:
 
     # Return the dictionary of column descriptions
     return descriptions
+
 
 
 #  TODO - Use the database Object for doing this
