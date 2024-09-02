@@ -18,9 +18,7 @@ from nlqs.parameters import OPENAI_API_KEY
 from nlqs.query import generate_query, similarity_search, summarize
 
 # ChromaDB configuration
-chroma_config = ChromaDBConfig(collection_name="aegion", persist_path=Path("../chroma"))
-
-chroma_client = chromadb.PersistentClient("../chroma")
+chroma_config = ChromaDBConfig(collection_name="aegion")
 
 # SQLite configuration
 sqlite_config = SQLiteConnectionConfig(db_file=Path("../aegion.db"), dataset_table_name="new_dataset")
@@ -35,10 +33,11 @@ primary_key = driver.get_primary_key(driver.db_config.dataset_table_name)
 TEST_CASES_FILE = "../test_cases.csv"
 BENCHMARK_RESULTS_FILE = "../benchmark_results.csv"
 
-chroma_client  = chromadb.PersistentClient()
-chroma_collection = get_chroma_collection(chroma_config.collection_name,chroma_client, driver, primary_key)
+chroma_client = chromadb.PersistentClient()
+chroma_collection = get_chroma_collection(chroma_config.collection_name, chroma_client, driver, primary_key)
 
-llm = ChatOpenAI(temperature=0, model="gpt-4-turbo", api_key=OPENAI_API_KEY, max_tokens=1000) # type: ignore
+llm = ChatOpenAI(temperature=0, model="gpt-4-turbo", api_key=OPENAI_API_KEY, max_tokens=1000)  # type: ignore
+
 
 # Main chat function
 def chat_benchmark(user_input, chat_history):
@@ -48,11 +47,13 @@ def chat_benchmark(user_input, chat_history):
     column_descriptions, numerical_columns, categorical_columns = driver.retrieve_descriptions_and_types_from_db()
 
     user_input = re.sub(r"{|}", "", user_input)
-    summarized_input = summarize(user_input, chat_history, column_descriptions, numerical_columns, categorical_columns, llm)
+    summarized_input = summarize(
+        user_input, chat_history, column_descriptions, numerical_columns, categorical_columns, llm
+    )
 
     if not summarized_input:
         summarized_input = summarize(
-            user_input, chat_history, column_descriptions, numerical_columns, categorical_columns,llm
+            user_input, chat_history, column_descriptions, numerical_columns, categorical_columns, llm
         )
 
     if not summarized_input:
@@ -93,7 +94,14 @@ def chat_benchmark(user_input, chat_history):
 
     if summarized_input.user_requested_columns:
         genenerted_query = generate_query(
-            user_input, summarized_input, chat_history, column_descriptions, numerical_columns, categorical_columns,llm,sqlite_config.dataset_table_name
+            user_input,
+            summarized_input,
+            chat_history,
+            column_descriptions,
+            numerical_columns,
+            categorical_columns,
+            llm,
+            sqlite_config.dataset_table_name,
         )
         if driver.validate_query(genenerted_query):
             query_result = driver.execute_query(genenerted_query)

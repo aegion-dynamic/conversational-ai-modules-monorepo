@@ -30,12 +30,6 @@ class SummarizedInput:
     user_intent: str
 
 
-# class Query:
-
-#     def __init__(self) -> None:
-#         self.column_descriptions, self.numerical_columns, self.categorical_columns = retrieve_descriptions_and_types_from_db()
-
-
 # Default system prompt for the LLM.
 DEFAULT_SYSTEM_PROMPT = (
     "You are a professional medical assistant, adept at handling inquiries related to medical products."
@@ -65,7 +59,7 @@ def summarize(
     column_descriptions_dictionary: Dict[str, str],
     numerical_columns: List[str],
     categorical_columns: List[str],
-    llm: Union[ChatOpenAI, OpenAI], 
+    llm: Union[ChatOpenAI, OpenAI],
 ) -> SummarizedInput:
     """Summarizes the user input and returns the summary, quantitative data, and qualitative data, along with the user requested columns in a JSON format.
 
@@ -98,10 +92,10 @@ def summarize(
     column_descriptions = list(column_descriptions_dictionary.items())
 
     prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            f"""
+        [
+            (
+                "system",
+                f"""
                 You will receive a user input and the chat history. Your task is to:
                 
                 1. **Single-Word Queries**: If the user input is a single word or very short (e.g., one or two words), provide a direct response if possible. If the query is unclear, prompt the user to elaborate.
@@ -149,9 +143,9 @@ def summarize(
 
                 Now, summarize the user input and provide the structured output in JSON format.
                 """,
-        ),
-        ("human", f"{user_input}"),
-    ]
+            ),
+            ("human", f"{user_input}"),
+        ]
     )
 
     # print(f"prompt: {prompt}")
@@ -184,6 +178,7 @@ def summarize(
     )
 
     return summarized_input
+
 
 def generate_quantitaive_serach_query(quantitaive_data: Dict[str, str], table_name: str, primary_key: str) -> str:
     """Creates an SQL query from a dictionary of quantitative data.
@@ -222,9 +217,10 @@ def generate_quantitaive_serach_query(quantitaive_data: Dict[str, str], table_na
 
     # Combine the query parts with AND
     query_constraints = " AND ".join(query_parts)
-    
+
     query = f"select {primary_key} from {table_name} where {query_constraints}"
     return query
+
 
 def qualitative_search(collection: chromadb.Collection, data: Dict[str, str], primary_key: str) -> List[int]:
     """Performs a similarity search on the database and returns up to 5 similar results per column.
@@ -237,7 +233,7 @@ def qualitative_search(collection: chromadb.Collection, data: Dict[str, str], pr
     Returns:
         List[int]: A list of unique IDs from the search results.
     """
-    ids_per_column = {}  
+    ids_per_column = {}
 
     for column, condition in data.items():
         query_result = collection.query(query_texts=condition, n_results=5, where={"column_name": column})
@@ -248,13 +244,13 @@ def qualitative_search(collection: chromadb.Collection, data: Dict[str, str], pr
                 for item in result:
                     id_value = item.get(primary_key)
                     if id_value is not None:
-                        ids_for_column.add(int(id_value)) 
+                        ids_for_column.add(int(id_value))
             ids_per_column[column] = list(ids_for_column)
 
     print(f"ids_per_column: {ids_per_column}")
 
     # Flatten the list of lists into a single list of unique IDs
-    all_ids = list(set([id_val for sublist in ids_per_column.values() for id_val in sublist])) 
+    all_ids = list(set([id_val for sublist in ids_per_column.values() for id_val in sublist]))
     return all_ids
 
 
@@ -321,7 +317,7 @@ def generate_query(
     numerical_columns: List[str],
     categorical_columns: List[str],
     llm: Union[ChatOpenAI, OpenAI],
-    dataset_table_name: str
+    dataset_table_name: str,
 ) -> str:
     """Generates an SQL query based on the user input and chat history.
 

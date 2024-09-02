@@ -12,9 +12,7 @@ from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
 from nlqs.nlqs import NLQS, ChromaDBConfig
 
 # ChromaDB configuration
-chroma_config = ChromaDBConfig(collection_name="aegion", persist_path=Path("../chroma"))
-
-chroma_client = chromadb.PersistentClient("../chroma")
+chroma_config = ChromaDBConfig(collection_name="aegion")
 
 # SQLite configuration
 sqlite_config = SQLiteConnectionConfig(db_file=Path("../aegion.db"), dataset_table_name="new_dataset")
@@ -36,7 +34,7 @@ with gr.Blocks(title="LUNA Chatbot") as demo:
 
     btn = gr.Button("submit")
 
-    nlqs_instance = NLQS(sqlite_config, chroma_config, chroma_client)
+    nlqs_instance = NLQS(sqlite_config, chroma_config)
 
     msg.submit(nlqs_instance.execute_nlqs_workflow, [msg, chatbot], [msg, chatbot])
     btn.click(nlqs_instance.execute_nlqs_workflow, [msg, chatbot], [msg, chatbot])

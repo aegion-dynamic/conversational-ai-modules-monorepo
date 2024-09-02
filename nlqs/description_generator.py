@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 import chromadb
 from langchain.chains import LLMChain
 from langchain_core.prompts import ChatPromptTemplate
@@ -12,22 +12,27 @@ from nlqs.database.postgres import PostgresDriver
 import pandas as pd
 
 
-# TODO - Use the database Object for doing this
-def get_column_descriptions(dataframe) -> dict:
-    """Get column descriptions from OpenAI API."""
-    # Initialize an empty dictionary to store column descriptions
+def get_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, str]:
+    """
+    Generates the descriptions for each columns.
+
+    Args:
+        dataframe(pd.Dataframe): data in the database converted into a pandas dataframe.
+
+    Returns:
+        descriptions(Dict[str, str]): a dictionary of column descriptions.
+    """
 
     print("Generating column descriptions...")
 
+    # Initialize an empty dictionary to store column descriptions
     descriptions = {}
 
     for column in dataframe.columns:
         # Get column data
         col_data = dataframe[column]
         col_type = col_data.dtype
-        sample_data = (
-            dataframe[column].dropna().sample(min(5, len(dataframe[column]))).tolist()
-        )
+        sample_data = dataframe[column].dropna().sample(min(5, len(dataframe[column]))).tolist()
         sample_data_str = ", ".join(map(str, sample_data))
         sample_data_str = re.sub("{|}", "", sample_data_str)
 
@@ -90,11 +95,22 @@ def get_column_descriptions(dataframe) -> dict:
     return descriptions
 
 
-
-#  TODO - Use the database Object for doing this
 def store_descriptions_in_db(
-    descriptions, numerical_columns, categorical_columns, db_driver: Union[SQLiteDriver, PostgresDriver]
+    descriptions: Dict[str, str],
+    numerical_columns: List[str],
+    categorical_columns: List[str],
+    db_driver: Union[SQLiteDriver, PostgresDriver],
 ):
+    """
+    Stores the generated column descriptions in the database.
+
+    Args:
+        descriptions (Dict[str,str]): description of each column along with the column name.
+        numerical_columns (List[str]): numerical columns in the database.
+        categorical_columns (List[str]): categorical columns in the database
+        db_driver (Union[SQLiteDriver, PostgresDriver]): Database driver.
+    """
+
     conn = db_driver._db_connection
     if conn is None:
         raise ValueError("Database connection not established.")
@@ -149,7 +165,6 @@ def store_descriptions_in_db(
         )
 
     conn.commit()
-    # conn.close()
 
 
 def get_chroma_collection(
@@ -159,6 +174,12 @@ def get_chroma_collection(
     primary_key: Optional[str],
 ) -> chromadb.Collection:
     """Gets the chroma collection.
+
+    Args:
+        collection_name (str): Name of the collection.
+        client (chromadb.Client): Chroma client.
+        db_driver (Union[SQLiteDriver, PostgresDriver]): Database driver.
+        primary_key (Optional[str]): Primary key column name.
 
     Returns:
         Chroma: Chroma collection.
@@ -215,6 +236,12 @@ def get_chroma_collection(
 
 
 def generate_column_description(df: pd.DataFrame, db_driver: Union[SQLiteDriver, PostgresDriver]):
+    """Generates and stores column descriptions in the database.
+
+    Args:
+        df (pd.DataFrame): data in the database converted into a pandas dataframe.
+        db_driver (Union[SQLiteDriver, PostgresDriver]): Database driver.
+    """
 
     # Get column descriptions
     column_descriptions = get_column_descriptions(dataframe=df)

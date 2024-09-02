@@ -1,4 +1,5 @@
 import logging
+import chromadb
 from nlqs.database.postgres import PostgresDriver, PostgresConnectionConfig
 from nlqs.database.sqlite import SQLiteDriver, SQLiteConnectionConfig
 import re
@@ -38,16 +39,22 @@ file_handler.setFormatter(formatter)
 # Add the file handler to the logger
 logger.addHandler(file_handler)
 
+
 @dataclass
 class ChromaDBConfig:
     collection_name: str
-    persist_path: Path
+    """removed persistant path because the it being passes down as a str rather than Path. 
+    I tried to convert it into path, but no use."""
+    host: str = "localhost"
+    port: int = 8000
     is_local: bool = True
 
 
 class NLQS:
 
-    def __init__(self, connection_config: Union[SQLiteConnectionConfig, PostgresConnectionConfig], chroma_config: ChromaDBConfig, chroma_client) -> None:
+    def __init__(
+        self, connection_config: Union[SQLiteConnectionConfig, PostgresConnectionConfig], chroma_config: ChromaDBConfig
+    ) -> None:
         # TODO - Figure out what the constructor parameters are
         if isinstance(connection_config, SQLiteConnectionConfig):
             self.connection_driver = SQLiteDriver(connection_config)
@@ -65,7 +72,11 @@ class NLQS:
         self.llm = ChatOpenAI(temperature=0, model="gpt-4-turbo", api_key=SecretStr(OPENAI_API_KEY), max_tokens=1000)
 
         self.chroma_config = chroma_config
-        self.chroma_client = chroma_client
+        chroma_type = chroma_config.is_local
+        if chroma_type:
+            self.chroma_client = chromadb.PersistentClient()
+        else:
+            self.chroma_client = chromadb.HttpClient(port=chroma_config.port, host=chroma_config.host)
 
         # TODO - Figure out if we need to create introspection table, and create
         pass
@@ -91,9 +102,7 @@ class NLQS:
         return column_descriptions, numerical_columns, categorical_columns
 
     # Step 4
-    def execute_nlqs_workflow(
-        self, user_input: str, chat_history: List[Tuple[str, str]]
-    ) -> str:
+    def execute_nlqs_workflow(self, user_input: str, chat_history: List[Tuple[str, str]]) -> List[str]:
         """This function is where the whole interaction happens.
         It takes the user input and chat history as input and returns the response if the user's intent is either phatic_communication, profanity or sql_injection.
         Else it returns the query result or search similarity result.
@@ -103,7 +112,7 @@ class NLQS:
             chat_history (list[(str, str)]): The chat history.
 
         Returns:
-            str: The response 
+            result list(str): The result
         """
 
         # Overview
@@ -140,7 +149,7 @@ class NLQS:
 
         # Step 5
         if not user_input.strip():
-            response = ""
+            result = [""]
 
         # Step 6
         user_input = re.sub(r"{|}", "", user_input)
@@ -168,7 +177,7 @@ class NLQS:
             )
             count += 1
             if count == 5:
-                response = "Summarization failed. Please try again."
+                result = ["Summarization failed. Please try again."]
                 break
 
         intent = summarized_input.user_intent
@@ -178,7 +187,7 @@ class NLQS:
         logger.info(f"Summarized input: {summarized_input}")
 
         if intent == "sql_injection":
-            response = ""
+            result = [""]
 
         else:
             print("checking for user requested columns...")
@@ -187,52 +196,16 @@ class NLQS:
                 quantitaive_data = summarized_input.quantitative_data
                 qualitative_data = summarized_input.qualitative_data
 
-
-                quantitaive_query = generate_quantitaive_serach_query(quantitaive_data, driver.db_config.dataset_table_name, primary_key)
-                # print(f"quantitaive_query: {quantitaive_query}")
+                quantitaive_query = generate_quantitaive_serach_query(
+                    quantitaive_data, driver.db_config.dataset_table_name, primary_key
+                )
                 quantitative_ids_uncleaned = driver.execute_query(quantitaive_query)
 
                 quantitative_ids = [item[0] for item in quantitative_ids_uncleaned]
-
                 print(f"quantitative_ids: {quantitative_ids}")
 
                 qualitative_ids = qualitative_search(chroma_collections, qualitative_data, primary_key)
-
-                # qualitative_ids = []
-                # for result in qualitaive_results:
-                #     for item in result:
-                #         qualitative_ids.append(int(item.get(primary_key)))
-                
                 print(f"qualitative_ids: {qualitative_ids}")
-
-
-                # Step 9
-                # genenerted_query = generate_query(
-                #     user_input=user_input,
-                #     summarized_input=summarized_input,
-                #     chat_history=chat_history,
-                #     column_descriptions=column_descriptions,
-                #     numerical_columns=numerical_columns,
-                #     categorical_columns=categorical_columns,
-                #     llm=self.llm,
-                #     dataset_table_name=driver.db_config.dataset_table_name,
-                # )
-
-                # logger.info(f"genenerted_query: {genenerted_query}")
-
-                # # Step 10
-                # if driver.validate_query(genenerted_query):
-                #     query_result = driver.execute_query(genenerted_query)
-                #     logger.info(f"query_result: {query_result}")
-
-                #     # Step 11
-                #     if not query_result:
-                #         query_result = similarity_search(chroma_collections, user_input)
-                #         logger.info(f"similarity_result: {query_result}")
-
-                #     response = str(query_result)
-                # else:
-                #     response = "error while generating query. Please try again."
 
                 # Find the intersection of quantitative_ids and qualitative_ids
                 if not quantitative_ids:
@@ -244,23 +217,21 @@ class NLQS:
 
                 print(intersection_ids)
 
-            
-                # final_query = f"select * from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
+                final_query = f"select * from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
 
-                # columns_database = driver.database_columns()
+                columns_database = driver.database_columns()
 
+                data_retreived = driver.execute_query(final_query)
+
+                result = columns_database + data_retreived
+
+                # final_query = f"select {', '.join(summarized_input.user_requested_columns)} from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
                 # data_retreived = str(driver.execute_query(final_query))
+                # result = f"{summarized_input.user_requested_columns}\n\n{data_retreived}"
 
-                # response = f"{columns_database}\n\n{data_retreived}"
-
-                final_query = f"select {', '.join(summarized_input.user_requested_columns)} from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
-                data_retreived = str(driver.execute_query(final_query))
-                response = f"{summarized_input.user_requested_columns}\n\n{data_retreived}"
-
-                logger.info(f"response: {data_retreived}")
+                logger.info(f"result: {result}")
 
             else:
-                response = ""
+                result = ["No results found"]
 
-        # chat_history.append((user_input, response))
-        return response
+        return result

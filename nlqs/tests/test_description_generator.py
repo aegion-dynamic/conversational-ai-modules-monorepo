@@ -18,7 +18,7 @@ def test_get_chroma_collection(sqlite_driver):
 
     ret = get_chroma_collection(
         collection_name="test",
-        chroma_client=chroma_client,
+        client=chroma_client,
         db_driver=db_driver,
         primary_key=primary_key,
     )

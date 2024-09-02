@@ -28,9 +28,8 @@ global_state = BotState.IDLE
 
 
 # ChromaDB configuration
-chroma_config = ChromaDBConfig(collection_name=CHROMA_COLLECTION_NAME, persist_path=Path("./chroma"))
+chroma_config = ChromaDBConfig(collection_name=CHROMA_COLLECTION_NAME)
 
-chroma_client = chromadb.PersistentClient()
 
 # SQLite configuration
 sqlite_config = SQLiteConnectionConfig(db_file=Path(SQLITE_DB_FILE), dataset_table_name=SQL_TABLE_NAME)
@@ -118,22 +117,18 @@ def create_bot() -> commands.Bot:
                 # Set the typing state on the channel
                 await message.channel.typing()
 
-                nlqs_instance = NLQS(sqlite_config, chroma_config, chroma_client)
-                queried_data = nlqs_instance.execute_nlqs_workflow(
-                    user_input, chat_history
-                )
-
-                corrected_chat_history = change_chat_history(chat_history)
+                nlqs_instance = NLQS(sqlite_config, chroma_config)
+                queried_data = nlqs_instance.execute_nlqs_workflow(user_input, chat_history)
 
                 if queried_data is None:
                     print("ERROR - Summarization failed")
-                    queried_data = ""
+                    queried_data = [""]
 
-                updated_user_input = "user input: " + user_input + "data retrieved for the user input :" + queried_data
+                corrected_chat_history = change_chat_history(chat_history)
                 print(f"corrected chat history: {corrected_chat_history}")
 
                 reply = chatbot_instance.converse(
-                    user_input=updated_user_input, previous_messages=corrected_chat_history
+                    user_input=user_input, retrieved_data=queried_data, previous_messages=corrected_chat_history
                 )
                 chat_history.append((user_input, reply[0]))
                 reply = f"<@{user_id}> " + reply[0]

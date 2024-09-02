@@ -59,15 +59,12 @@ class SQLiteDriver(AbstractDriver):
             self.cursor.execute(query)
             result = self.cursor.fetchall()
             self._db_connection.commit()
-            print(f"result: {result}")
-            print("--------------------")
             logger.info(f"Query executed successfully: {result}")
             return result if result else []
         except sqlite3.Error as e:
             error_message = f"Error executing SQL query: {e}"
             logger.error(error_message)
             raise e
-            # return error_message
 
     def retrieve_descriptions_and_types_from_db(self) -> Tuple[Dict[str, str], List[str], List[str]]:
         """Retrieves descriptions and types from the SQLite database.
@@ -96,8 +93,16 @@ class SQLiteDriver(AbstractDriver):
         except sqlite3.Error as e:
             logger.error(f"Error retrieving descriptions and types: {e}")
             return {}, [], []
-        
-    def database_columns(self) -> list[str]:
+
+    def database_columns(self) -> List[str]:
+        """Returns the columns in the database or table
+
+        Raises:
+            ValueError: Error retrieving columns
+
+        Returns:
+            columns (List[str]): columns in the database
+        """
         if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
         try:
@@ -107,7 +112,6 @@ class SQLiteDriver(AbstractDriver):
         except sqlite3.Error as e:
             logger.error(f"Error retrieving columns: {e}")
             return []
-        
 
     def validate_query(self, query: str) -> bool:
         """Validates the generated SQL query against the database schema and returns True if valid, False otherwise.
@@ -162,7 +166,7 @@ class SQLiteDriver(AbstractDriver):
             logger.error(f"Error validating query: {e}")
             print(f"Error validating query: {e}")
             return False
-        
+
     def check_table_exists(self, table_name: str) -> bool:
         """Checks if a table exists in a SQLite database.
 
@@ -175,7 +179,7 @@ class SQLiteDriver(AbstractDriver):
         """
         if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
-        
+
         try:
             self.cursor.execute(
                 """
@@ -208,14 +212,11 @@ class SQLiteDriver(AbstractDriver):
             if conn is None:
                 raise ValueError("Database connection not established.")
             df = pd.read_sql_query(query, conn)
-            # conn.close()
         except sqlite3.Error as e:
             print(f"Error fetching data: {e}")
             return pd.DataFrame()  # Return an empty DataFrame on error
 
         return df
-    
-    import sqlite3
 
     def get_primary_key(self, table_name: str) -> str:
         """
@@ -252,10 +253,9 @@ class SQLiteDriver(AbstractDriver):
         except sqlite3.Error as e:
             raise sqlite3.Error(f"Error getting primary key from table '{table_name}': {e}")
 
-
     @property
     def db_connection(self) -> sqlite3.Connection:
         if self._db_connection is None:
             raise ValueError("Database connection not established.")
-        
+
         return self._db_connection

@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # Set the logging level (e.g., DEBUG, INFO, WARNING, ERROR)
 logger.setLevel(logging.INFO)
 
+
 @dataclass
 class PostgresConnectionConfig:
     host: str
@@ -29,15 +30,15 @@ class PostgresConnectionConfig:
 class PostgresDriver(AbstractDriver):
     def __init__(self, pg_config: PostgresConnectionConfig):
         """
-        
+
         Example:
         postgres_config = PostgresConnectionConfig(
-            host="localhost", 
-            port=5432, 
-            user="postgres",  
+            host="localhost",
+            port=5432,
+            user="postgres",
             password="password",
-            database_name="aegion",  
-            dataset_table_name="new_dataset"  
+            database_name="aegion",
+            dataset_table_name="new_dataset"
         )
 
         """
@@ -48,12 +49,12 @@ class PostgresDriver(AbstractDriver):
     def connect(self):
         try:
             self._db_connection = psycopg2.connect(
-                dbname=self.db_config.database_name, 
-                user=self.db_config.user, 
-                password=self.db_config.password, 
-                host=self.db_config.host, 
-                port=self.db_config.port
-            )            
+                dbname=self.db_config.database_name,
+                user=self.db_config.user,
+                password=self.db_config.password,
+                host=self.db_config.host,
+                port=self.db_config.port,
+            )
             self.cursor = self._db_connection.cursor()
             logger.info("Connected to PostgreSQL database.")
         except psycopg2.Error as e:
@@ -89,7 +90,6 @@ class PostgresDriver(AbstractDriver):
             error_message = f"Error executing SQL query: {e}"
             logger.error(error_message)
             raise e
-            # return error_message
 
     def retrieve_descriptions_and_types_from_db(self) -> Tuple[Dict[str, str], List[str], List[str]]:
         """Retrieves descriptions and types from the PostgreSQL database.
@@ -119,8 +119,16 @@ class PostgresDriver(AbstractDriver):
         except psycopg2.Error as e:
             logger.error(f"Error retrieving descriptions and types: {e}")
             return {}, [], []
-        
-    def database_columns(self) -> list[str]:
+
+    def database_columns(self) -> List[str]:
+        """Returns the columns in the database or table
+
+        Raises:
+            ValueError: Error retrieving columns
+
+        Returns:
+            columns (List[str]): columns in the database
+        """
         if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
         try:
@@ -142,10 +150,10 @@ class PostgresDriver(AbstractDriver):
         """
         if not query.strip() or not query.lower().startswith("select"):
             return False
-        
+
         if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
-        
+
         try:
             match = re.search(r"FROM\s+(\w+)", query, re.IGNORECASE)
             if not match:
@@ -157,11 +165,16 @@ class PostgresDriver(AbstractDriver):
                 return False
             columns = column_match.group(1).strip().split(",")
 
-            self.cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name=%s", (table_name,))
+            self.cursor.execute(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name=%s",
+                (table_name,),
+            )
             if not self.cursor.fetchone():
                 return False
 
-            self.cursor.execute(sql.SQL("SELECT column_name FROM information_schema.columns WHERE table_name = %s"), [table_name])
+            self.cursor.execute(
+                sql.SQL("SELECT column_name FROM information_schema.columns WHERE table_name = %s"), [table_name]
+            )
             table_columns = [row[0] for row in self.cursor.fetchall()]
             for column in columns:
                 column = column.strip()
@@ -172,7 +185,6 @@ class PostgresDriver(AbstractDriver):
         except psycopg2.Error as e:
             logger.error(f"Error validating query: {e}")
             return False
-
 
     def fetch_data_from_database(self, table_name: str) -> pd.DataFrame:
         """Fetch data from a PostgreSQL database table.
@@ -189,14 +201,14 @@ class PostgresDriver(AbstractDriver):
         try:
             conn = self._db_connection
             query = f"SELECT * FROM {table_name}"
-            df = pd.read_sql_query(query, conn) # type: ignore
+            df = pd.read_sql_query(query, conn)  # type: ignore
             conn.close()
         except psycopg2.Error as e:
             logger.error(f"Error fetching data: {e}")
             return pd.DataFrame()  # Return an empty DataFrame on error
-            
+
         return df
-    
+
     def get_primary_key(self, table_name: str) -> str:
         """
         Retrieves the primary key column name from a SQLite table.
@@ -205,7 +217,7 @@ class PostgresDriver(AbstractDriver):
             table_name (str): The name of the table to check.
 
         Returns:
-            primary key (str): The name of the primary key column, 
+            primary key (str): The name of the primary key column,
                            or None if no primary key is found.
         """
         if self.cursor is None or self._db_connection is None:
