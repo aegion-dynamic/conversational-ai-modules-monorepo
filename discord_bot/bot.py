@@ -2,8 +2,6 @@ from pathlib import Path
 import random
 import re
 from typing import Any, List, Optional, Tuple, Union
-
-import chromadb
 import discord
 from discord.ext import commands
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage

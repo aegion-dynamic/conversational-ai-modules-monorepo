@@ -5,10 +5,9 @@ And this could be greatful while testing the bot.
 """
 
 from pathlib import Path
-import chromadb
 import gradio as gr
 
-from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
+from nlqs.database.sqlite import SQLiteConnectionConfig
 from nlqs.nlqs import NLQS, ChromaDBConfig
 
 # ChromaDB configuration
@@ -16,12 +15,6 @@ chroma_config = ChromaDBConfig(collection_name="aegion")
 
 # SQLite configuration
 sqlite_config = SQLiteConnectionConfig(db_file=Path("../aegion.db"), dataset_table_name="new_dataset")
-
-# driver = SQLiteDriver(sqlite_config)
-
-# driver.connect()
-
-# primary_key = driver.get_primary_key(driver.db_config.dataset_table_name)
 
 # Gradio interface
 with gr.Blocks(title="LUNA Chatbot") as demo:
