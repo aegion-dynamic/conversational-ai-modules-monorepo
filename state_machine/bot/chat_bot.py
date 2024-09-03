@@ -2,8 +2,8 @@ import json
 import logging
 from datetime import datetime
 from typing import Dict, Any
-from bot.prompts import get_json_output_prompt, get_classification_prompt, get_thought_generation_prompt, get_evaluation_prompt, get_sample_data
-from bot.session import initialize_session_data, update_session_data
+from state_machine.bot.prompts import get_json_output_prompt, get_classification_prompt, get_thought_generation_prompt, get_evaluation_prompt, get_sample_data
+from state_machine.bot.session import initialize_session_data, update_session_data
 from tot.tree_of_thoughts_executor import TreeOfThoughtsExecutor, ToTExecutorInputs
 import os
 

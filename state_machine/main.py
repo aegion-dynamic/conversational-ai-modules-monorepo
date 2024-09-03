@@ -1,5 +1,5 @@
 import logging
-from bot.chat_bot import CannabisRecommendationBot
+from state_machine.bot.chat_bot import CannabisRecommendationBot
 
 logging.basicConfig(
     filename='logs/cannabis_bot.log',

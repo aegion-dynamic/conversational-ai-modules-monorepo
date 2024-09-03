@@ -1,4 +1,4 @@
-def get_json_output_prompt(self) -> str:
+def get_json_output_prompt() -> str:
         return """
         User Query: {user_query}
         Final State: {final_state}
@@ -36,7 +36,7 @@ def get_json_output_prompt(self) -> str:
         Use the provided algorithm framework to guide the questioning process and product recommendations.
         """
 
-def get_classification_prompt(self) -> str:
+def get_classification_prompt() -> str:
         return """
         Classify the user's intent based on the following input:
 
@@ -51,7 +51,7 @@ def get_classification_prompt(self) -> str:
         Respond with only the number corresponding to the intent.
         """
 
-def get_thought_generation_prompt(self) -> str:
+def get_thought_generation_prompt() -> str:
         return """
         Given the current conversation state and user input, generate potential follow-up questions, responses, or recommendations in the cannabis recommendation process.
         Use the following sample data structure to guide your questions:
@@ -71,7 +71,7 @@ def get_thought_generation_prompt(self) -> str:
         For each question, provide a list of relevant options for the user to choose from, based on the unique values in the sample data.
         """
 
-def get_evaluation_prompt(self) -> str:
+def get_evaluation_prompt() -> str:
         return """
         Evaluate the potential next steps in the cannabis recommendation conversation based on the following criteria:
         1. Relevance to the user's stated needs and preferences for cannabis products
