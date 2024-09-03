@@ -5,7 +5,7 @@ from typing import List, Tuple, Union
 import discord
 from discord.ext import commands
 from langchain_core.messages import AIMessage, HumanMessage
-from discord_bot.parameters import CHROMA_COLLECTION_NAME, SQL_TABLE_NAME, SQLITE_DB_FILE
+from discord_bot.parameters import CHROMA_COLLECTION_NAME, OUTPUT_COLUMNS, SQL_TABLE_NAME, SQLITE_DB_FILE
 from nlqs.database.sqlite import SQLiteConnectionConfig
 import discord_bot.memory as memory
 from chatbot.conversation import Chatbot
@@ -29,7 +29,7 @@ chroma_config = ChromaDBConfig(collection_name=CHROMA_COLLECTION_NAME)
 
 # SQLite configuration
 sqlite_config = SQLiteConnectionConfig(
-    db_file=Path(SQLITE_DB_FILE), dataset_table_name=SQL_TABLE_NAME, uri_column="URL"
+    db_file=Path(SQLITE_DB_FILE), dataset_table_name=SQL_TABLE_NAME, uri_column="URL", output_columns=OUTPUT_COLUMNS
 )
 
 

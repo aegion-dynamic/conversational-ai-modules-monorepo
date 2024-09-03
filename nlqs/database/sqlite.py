@@ -19,6 +19,7 @@ class SQLiteConnectionConfig:
     db_file: Path
     dataset_table_name: str
     uri_column: Optional[str] = None
+    output_columns: Optional[List[str]] = None
 
 
 class SQLiteDriver(AbstractDriver):

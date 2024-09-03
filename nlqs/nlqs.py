@@ -80,7 +80,9 @@ class NLQS:
         else:
             self.chroma_client = chromadb.HttpClient(port=chroma_config.port, host=chroma_config.host)
 
+        self.table_name = connection_config.dataset_table_name
         self.uri_column = connection_config.uri_column
+        self.output_columns = connection_config.output_columns
 
         # TODO - Figure out if we need to create introspection table, and create
         pass
@@ -94,9 +96,7 @@ class NLQS:
         if column_descriptions == {}:
             # Step 2
             generate_column_description(
-                df=self.connection_driver.fetch_data_from_database(
-                    table_name=self.connection_driver.db_config.dataset_table_name
-                ),
+                df=self.connection_driver.fetch_data_from_database(table_name=self.table_name),
                 db_driver=self.connection_driver,
             )
             column_descriptions, numerical_columns, categorical_columns = (
@@ -141,7 +141,7 @@ class NLQS:
 
         column_descriptions, numerical_columns, categorical_columns = self._create_introspection_table()
 
-        primary_key = driver.get_primary_key(driver.db_config.dataset_table_name)
+        primary_key = driver.get_primary_key(self.table_name)
 
         # Chroma Collection
         chroma_collections = get_chroma_collection(
@@ -200,9 +200,7 @@ class NLQS:
                 quantitaive_data = summarized_input.quantitative_data
                 qualitative_data = summarized_input.qualitative_data
 
-                quantitaive_query = generate_quantitaive_serach_query(
-                    quantitaive_data, driver.db_config.dataset_table_name, primary_key
-                )
+                quantitaive_query = generate_quantitaive_serach_query(quantitaive_data, self.table_name, primary_key)
                 quantitative_ids_uncleaned = driver.execute_query(quantitaive_query)
 
                 quantitative_ids = [item[0] for item in quantitative_ids_uncleaned]
@@ -221,30 +219,44 @@ class NLQS:
 
                 print(intersection_ids)
 
-                final_query = f"select * from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
+                # Initial query to retrieve all columns based on the intersection IDs
+                final_query = f"SELECT * FROM {self.table_name} WHERE {primary_key} IN ({','.join(str(id) for id in intersection_ids)})"
 
-                columns_database = driver.get_database_columns(driver.db_config.dataset_table_name)
+                # Get the columns in the order they appear in the database
+                columns_database = driver.get_database_columns(self.table_name)
 
-                data_retreived = driver.execute_query(final_query)
+                # Variables for specific columns
                 uri_column = self.uri_column
+                output_columns = self.output_columns
 
-                # Create a list of dictionaries, where each dictionary represents a row
-                # Also, extract the URIs separately
+                # If output_columns is specified, modify the query to select only those columns
+                if output_columns:
+                    final_query = f"SELECT {','.join(col for col in output_columns)} FROM {self.table_name} WHERE {primary_key} IN ({','.join(str(id) for id in intersection_ids)})"
+                    data_retreived = driver.execute_query(final_query)
+                    # Since we now have a subset of columns, use output_columns directly
+                    columns_to_use = output_columns
+                else:
+                    # Execute the query to retrieve the data with all columns
+                    data_retreived = driver.execute_query(final_query)
+                    columns_to_use = columns_database
+
+                # Initialize lists to hold records and URIs
                 records = []
                 uris = []
 
+                # Process the retrieved data
                 for row in data_retreived:
-                    record = dict(zip(columns_database, row))
+                    record = dict(zip(columns_to_use, row))
                     if uri_column in record:
                         uris.append(str(record[uri_column]))
                         del record[uri_column]  # Remove the URI column data from the record
                     records.append(record)
 
+                # Create the result object
                 result = NLQSResult(records=records, uris=uris)
+
                 print(f"result: {result}")
-
                 logger.info(f"result: {result}")
-
             else:
                 result = NLQSResult(records=[], uris=[])
 

@@ -16,11 +16,9 @@ from chatbot.parameters import (
     VECTORDB_PORT,
     VECTORDB_USERNAME,
 )
-from discord_bot.parameters import OUTPUT_COLUMNS
 
 
 def query_template(
-    output_columns: List[str],
     user_input: str,
     retrieved_data,
     previous_messages: Optional[List[Union[HumanMessage, AIMessage]]] = None,
@@ -68,17 +66,7 @@ def query_template(
     if previous_messages is not None:
         for message in previous_messages:
             if isinstance(message, HumanMessage):
-                if not output_columns:
-                    messages.append(("human", str(message.content)))
-                else:
-                    messages.append(
-                        (
-                            "human",
-                            str(message.content)
-                            + "I specifically only want to know about the columns: "
-                            + str(" ".join(output_columns)),
-                        )
-                    )
+                messages.append(("human", str(message.content)))
             elif isinstance(message, AIMessage):
                 messages.append(("ai", str(message.content)))
     template = ChatPromptTemplate.from_messages(messages)
@@ -164,7 +152,6 @@ class Chatbot:
         updated_retrieved_data = re.sub("{|}", "", str(retrieved_data))
 
         prompt = query_template(
-            output_columns=OUTPUT_COLUMNS,
             user_input=user_input,
             retrieved_data=updated_retrieved_data,
             previous_messages=previous_messages,
