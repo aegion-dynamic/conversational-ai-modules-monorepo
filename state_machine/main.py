@@ -1,10 +1,20 @@
 import logging
+from os import mkdir
+from pathlib import Path
+
+from py import log
 from state_machine.bot.chat_bot import CannabisRecommendationBot
+
+
+log_path = Path('./logs/cannabis_bot.log')
+if not log_path.exists():
+    # log_path.parent.mkdir(parents=True)
+    log_path.touch(exist_ok=True)
 
 logging.basicConfig(
     filename='logs/cannabis_bot.log',
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s',
 )
 
 def main():

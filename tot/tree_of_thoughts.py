@@ -2,10 +2,10 @@ import openai
 import json
 import logging
 from typing import List, Dict, Any, Optional, Tuple
-from sample_data_manager import SampleDataManager
-from intent_classifier import IntentClassifier
-from thought_generator import ThoughtGenerator
-from state_evaluator import StateEvaluator
+from tot.sample_data_manager import SampleDataManager
+from tot.intent_classifier import IntentClassifier
+from tot.thought_generator import ThoughtGenerator
+from tot.state_evaluator import StateEvaluator
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
 from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
 
