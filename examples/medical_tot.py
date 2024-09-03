@@ -3,9 +3,9 @@ import json
 import os
 from typing import LiteralString
 from dotenv import load_dotenv
-from tree_of_thoughts_executor import TreeOfThoughtsExecutor, ToTExecutorInputs
-from thought_generator import ThoughtGenerator
-from state_evaluator import StateEvaluator
+from tot.tree_of_thoughts_executor import TreeOfThoughtsExecutor, ToTExecutorInputs
+from tot.thought_generator import ThoughtGenerator
+from tot.state_evaluator import StateEvaluator
 # Setup basic logging configuration
 logging.basicConfig(level=logging.INFO)
 
@@ -107,7 +107,7 @@ Los Angeles,Bedroom,THC Gummies,Edibles,PKG002,B002,0,100,0,0,0,0,4.8,Relaxation
         
         # Execute the problem-solving process
         output = executor.execute(user_query=user_query)
-        
+        print(output)
         # Print the result in a formatted JSON structure
         print(json.dumps(output, indent=2))
     except Exception as e:
