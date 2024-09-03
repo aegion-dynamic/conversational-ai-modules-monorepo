@@ -75,8 +75,7 @@ class NLQS:
         self.chroma_config = chroma_config
         chroma_type = chroma_config.is_local
         if chroma_type:
-            self.chroma_client = chromadb.PersistentClient()  # annaya we need to pass the persist path here
-            # self.chroma_client = chromadb.PersistentClient(path=self.chroma_config.persist_path)
+            self.chroma_client = chromadb.PersistentClient(path=str(self.chroma_config.persist_path))
         else:
             self.chroma_client = chromadb.HttpClient(port=chroma_config.port, host=chroma_config.host)
 
