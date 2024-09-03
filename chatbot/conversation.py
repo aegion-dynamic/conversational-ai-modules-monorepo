@@ -1,29 +1,18 @@
-from re import template
-from typing import Any, List, Literal, Optional, Tuple, Union
-
+import re
+from typing import List, Optional, Tuple, Union
 import chromadb
 from chromadb.config import Settings
-from langchain.chains import LLMChain, RetrievalQA
-from langchain_community.llms import OpenAIChat
+from langchain.chains import RetrievalQA
 from langchain_community.vectorstores import Chroma
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-
-# from langchain.prompts import ChatPromptTemplate, PromptTemplate
-from langchain_core.prompts import (
-    ChatPromptTemplate,
-    HumanMessagePromptTemplate,
-    PromptTemplate,
-)
-from langchain_core.prompts.chat import BaseMessagePromptTemplate
-from langchain_openai import ChatOpenAI, OpenAI, OpenAIEmbeddings
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from pydantic.v1 import SecretStr
-
 from chatbot.chat_reference import ChatReference
 from chatbot.parameters import (
     OPENAI_API_KEY,
     VECTORDB_HOST,
     VECTORDB_PASSWORD,
-    VECTORDB_PERSIST_DIRECTORY,
     VECTORDB_PORT,
     VECTORDB_USERNAME,
 )
@@ -33,7 +22,7 @@ from discord_bot.parameters import OUTPUT_COLUMNS
 def query_template(
     output_columns: List[str],
     user_input: str,
-    retrieved_data: List[str],
+    retrieved_data,
     previous_messages: Optional[List[Union[HumanMessage, AIMessage]]] = None,
 ):
     messages = [
@@ -80,18 +69,18 @@ def query_template(
         for message in previous_messages:
             if isinstance(message, HumanMessage):
                 if not output_columns:
-                    messages.append(("human", message.content))  # type: ignore
+                    messages.append(("human", str(message.content)))
                 else:
                     messages.append(
                         (
                             "human",
-                            message.content
-                            + "I specifically only want to know about the columns: "  # type: ignore
-                            + " ".join(output_columns),
+                            str(message.content)
+                            + "I specifically only want to know about the columns: "
+                            + str(" ".join(output_columns)),
                         )
                     )
             elif isinstance(message, AIMessage):
-                messages.append(("ai", message.content))  # type: ignore
+                messages.append(("ai", str(message.content)))
     template = ChatPromptTemplate.from_messages(messages)
 
     return template
@@ -157,7 +146,7 @@ class Chatbot:
     def converse(
         self,
         user_input: str,
-        retrieved_data: List[str],
+        retrieved_data,
         previous_messages: Optional[List[Union[HumanMessage, AIMessage]]] = None,
     ) -> Tuple[str, List[ChatReference]]:
         """Converse with the chatbot
@@ -172,11 +161,12 @@ class Chatbot:
         if previous_messages is None:
             previous_messages = []
         previous_messages.append(HumanMessage(content=user_input))
+        updated_retrieved_data = re.sub("{|}", "", str(retrieved_data))
 
         prompt = query_template(
             output_columns=OUTPUT_COLUMNS,
             user_input=user_input,
-            retrieved_data=retrieved_data,
+            retrieved_data=updated_retrieved_data,
             previous_messages=previous_messages,
         )
         result = self.qachain({"query": prompt.format(user_question=user_input)})

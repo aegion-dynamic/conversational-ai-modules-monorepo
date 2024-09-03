@@ -9,13 +9,13 @@ import re
 
 import chromadb
 from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
+from pydantic.v1 import SecretStr
 
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
 from nlqs.description_generator import get_chroma_collection
 from nlqs.nlqs import ChromaDBConfig
 from nlqs.parameters import OPENAI_API_KEY
-from nlqs.query import generate_query, similarity_search, summarize
+from nlqs.query import summarize
 
 # ChromaDB configuration
 chroma_config = ChromaDBConfig(collection_name="aegion")
@@ -36,7 +36,7 @@ BENCHMARK_RESULTS_FILE = "../benchmark_results.csv"
 chroma_client = chromadb.PersistentClient()
 chroma_collection = get_chroma_collection(chroma_config.collection_name, chroma_client, driver, primary_key)
 
-llm = ChatOpenAI(temperature=0, model="gpt-4-turbo", api_key=OPENAI_API_KEY, max_tokens=1000)  # type: ignore
+llm = ChatOpenAI(temperature=0, model="gpt-4-turbo", api_key=SecretStr(OPENAI_API_KEY), max_tokens=1000)
 
 
 # Main chat function
@@ -93,7 +93,7 @@ def chat_benchmark(user_input, chat_history):
         return chat_history, response, log_data
 
     if summarized_input.user_requested_columns:
-        genenerted_query = generate_query(
+        genenerted_query = generate_query(  # i'll update the benchmark file tonight..
             user_input,
             summarized_input,
             chat_history,

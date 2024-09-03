@@ -1,16 +1,11 @@
 import json
 import logging
+import chromadb
 from dataclasses import dataclass
-import re
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Tuple, Union
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain.chains import LLMChain
-from langchain.memory import ConversationBufferMemory
-from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI, OpenAI
-
-import chromadb
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -141,7 +136,7 @@ def summarize(
                 descriptive columns in the data: {categorical_columns}\n\n 
                 chat history: {chat_history}
 
-                Now, summarize the user input and provide the structured output in JSON format.
+                Now, summarize the user input, chat history and provide the structured output in JSON format.
                 """,
             ),
             ("human", f"{user_input}"),
@@ -236,7 +231,9 @@ def qualitative_search(collection: chromadb.Collection, data: Dict[str, str], pr
     ids_per_column = {}
 
     for column, condition in data.items():
-        query_result: chromadb.QueryResult = collection.query(query_texts=condition, n_results=5, where={"column_name": column})
+        query_result: chromadb.QueryResult = collection.query(
+            query_texts=condition, n_results=5, where={"column_name": column}
+        )
 
         if query_result["metadatas"]:
             ids_for_column = set()
@@ -283,95 +280,3 @@ def qualitative_search(collection: chromadb.Collection, data: Dict[str, str], pr
 #     common_ids = set.intersection(*all_ids) if all_ids else set()
 
 #     return list(common_ids)
-
-
-# Function to perform a similarity search
-def similarity_search(collection: chromadb.Collection, user_input: str) -> str:
-    """Performs a similarity search on the database and returns the first similar result.
-
-    Args:
-        user_input (str): the user input.
-
-    Returns:
-        str: the first similar result.
-
-    """
-    result = collection.query(query_texts=user_input, n_results=1, include=["documents", "metadatas"])
-    if result:
-        result_str = str(result)
-        result_str = result_str.replace("{", "")
-        result_str = result_str.replace("}", '"')
-        logger.info(f"Result: {result_str}")
-        return result_str
-    else:
-        logger.info("No similar result found.")
-        return ""
-
-
-# Function to generate a response based on the user input
-def generate_query(
-    user_input: str,
-    summarized_input: SummarizedInput,
-    chat_history: List[Tuple[str, str]],
-    column_descriptions: Dict[str, str],
-    numerical_columns: List[str],
-    categorical_columns: List[str],
-    llm: Union[ChatOpenAI, OpenAI],
-    dataset_table_name: str,
-) -> str:
-    """Generates an SQL query based on the user input and chat history.
-
-    Args:
-        user_input (str): the user input.
-        summarized_input (dict): the summarized input.
-        chat_history (list[(str, str)]): the chat history.
-        column_descriptions (dict): the column descriptions.
-        numerical_columns (list[str]): the numerical columns.
-        categorical_columns (list[str]): the categorical columns.
-        llm (Union[ChatOpenAI, OpenAI]): the LLM object.
-        dataset_table_name (str): the dataset table name.
-
-    Returns:
-        str: execute_query function executes the SQL query
-    """
-    quantitative_data = list(summarized_input.quantitative_data.items())
-    qualitative_data = list(summarized_input.qualitative_data.items())
-    user_requested_columns = summarized_input.user_requested_columns
-
-    instruction = f"""
-    Generate an SQLite query based on the user input and other data. For numerical columns, use exact matches. 
-    For descriptive columns, use 'LIKE' for partial matches but handle possible spelling mistakes and close matches. 
-    insert ORDER BY CustomerRating DESC LIMIT 3 if needed. 
-    
-    Generate the query according to the user input, chat history, and database schema. 
-    Ensure that the query is robust, handles various user input scenarios, and incorporates appropriate conditions.
-    Answer just the query without any explanation and code. 
-
-    The data we have:
-    numerical columns in the data: {numerical_columns}\n\n 
-    descriptive columns in the data: {categorical_columns}\n\n 
-    The columns in the database were {', '.join(column_descriptions.keys())}\n\n
-    Table name: {dataset_table_name}\n\n
-    User input: {user_input}\n\n
-    quantitative data in the user input: {quantitative_data}\n\n
-    qualitative data in the user input: {qualitative_data}\n\n
-    user requested columns: {user_requested_columns}\n\n
-    Chat history: {chat_history}\n\n
-
-    Generate the SQLite query below:
-    """
-
-    system_prompt = (
-        "You are an expert in SQL queries. Create robust queries based on the user requirements and database schema."
-    )
-    prompt = get_prompt(instruction, system_prompt)
-    prompt_template = PromptTemplate(template=prompt, input_variables=["chat_history", "user_input"])
-    memory = ConversationBufferMemory(memory_key="chat_history")
-
-    llm_chain = LLMChain(llm=llm, prompt=prompt_template, verbose=True, memory=memory)
-
-    query = llm_chain.run({"chat_history": chat_history, "user_input": user_input}).strip()
-    query = re.sub(r"```sql|```", "", query)
-    logger.info(f"Query: {query}")
-
-    return query

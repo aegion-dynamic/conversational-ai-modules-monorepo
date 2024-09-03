@@ -1,25 +1,23 @@
 from pathlib import Path
 import random
 import re
-from typing import Any, List, Optional, Tuple, Union
+from typing import List, Tuple, Union
 import discord
 from discord.ext import commands
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from discord_bot.parameters import CHROMA_COLLECTION_NAME, SQL_TABLE_NAME, SQLITE_DB_FILE
 from nlqs.database.sqlite import SQLiteConnectionConfig
-
 import discord_bot.memory as memory
 from chatbot.conversation import Chatbot
 from discord_bot.memory import (
     active_users,
     add_to_chat_history,
     chat_history,
-    get_user_chat_history,
     set_user_active,
     set_user_inactive,
 )
 from discord_bot.state import BotState, empty_active_users, new_user, user_exists
-from nlqs.nlqs import NLQS, ChromaDBConfig
+from nlqs.nlqs import NLQS, ChromaDBConfig, NLQSResult
 
 # Global variable to store the state of the bot
 global_state = BotState.IDLE
@@ -30,7 +28,9 @@ chroma_config = ChromaDBConfig(collection_name=CHROMA_COLLECTION_NAME)
 
 
 # SQLite configuration
-sqlite_config = SQLiteConnectionConfig(db_file=Path(SQLITE_DB_FILE), dataset_table_name=SQL_TABLE_NAME)
+sqlite_config = SQLiteConnectionConfig(
+    db_file=Path(SQLITE_DB_FILE), dataset_table_name=SQL_TABLE_NAME, uri_column="URL"
+)
 
 
 def create_bot() -> commands.Bot:
@@ -120,7 +120,7 @@ def create_bot() -> commands.Bot:
 
                 if queried_data is None:
                     print("ERROR - Summarization failed")
-                    queried_data = [""]
+                    queried_data = NLQSResult(records=[], uris=[])
 
                 corrected_chat_history = change_chat_history(chat_history)
                 print(f"corrected chat history: {corrected_chat_history}")

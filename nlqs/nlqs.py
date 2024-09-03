@@ -5,13 +5,9 @@ from nlqs.database.sqlite import SQLiteDriver, SQLiteConnectionConfig
 import re
 from typing import Dict, List, Tuple, Union
 from nlqs.description_generator import generate_column_description, get_chroma_collection
-
-
 from nlqs.query import (
     generate_quantitaive_serach_query,
-    generate_query,
     qualitative_search,
-    similarity_search,
     summarize,
 )
 from dataclasses import dataclass
@@ -49,6 +45,12 @@ class ChromaDBConfig:
     is_local: bool = True
 
 
+@dataclass
+class NLQSResult:
+    records: List[Dict[str, str]]
+    uris: List[str]
+
+
 class NLQS:
 
     def __init__(
@@ -73,9 +75,12 @@ class NLQS:
         self.chroma_config = chroma_config
         chroma_type = chroma_config.is_local
         if chroma_type:
-            self.chroma_client = chromadb.PersistentClient()
+            self.chroma_client = chromadb.PersistentClient()  # annaya we need to pass the persist path here
+            # self.chroma_client = chromadb.PersistentClient(path=self.chroma_config.persist_path)
         else:
             self.chroma_client = chromadb.HttpClient(port=chroma_config.port, host=chroma_config.host)
+
+        self.uri_column = connection_config.uri_column
 
         # TODO - Figure out if we need to create introspection table, and create
         pass
@@ -101,7 +106,7 @@ class NLQS:
         return column_descriptions, numerical_columns, categorical_columns
 
     # Step 4
-    def execute_nlqs_workflow(self, user_input: str, chat_history: List[Tuple[str, str]]) -> List[str]:
+    def execute_nlqs_workflow(self, user_input: str, chat_history: List[Tuple[str, str]]) -> NLQSResult:
         """This function is where the whole interaction happens.
         It takes the user input and chat history as input and returns the response if the user's intent is either phatic_communication, profanity or sql_injection.
         Else it returns the query result or search similarity result.
@@ -111,7 +116,7 @@ class NLQS:
             chat_history (list[(str, str)]): The chat history.
 
         Returns:
-            result list(str): The result
+            result (NLQSResult): The result
         """
 
         # Overview
@@ -148,7 +153,7 @@ class NLQS:
 
         # Step 5
         if not user_input.strip():
-            result = [""]
+            result = NLQSResult(records=[], uris=[])
 
         # Step 6
         user_input = re.sub(r"{|}", "", user_input)
@@ -186,7 +191,7 @@ class NLQS:
         logger.info(f"Summarized input: {summarized_input}")
 
         if intent == "sql_injection":
-            result = [""]
+            result = NLQSResult(records=[], uris=[])
 
         else:
             print("checking for user requested columns...")
@@ -218,19 +223,29 @@ class NLQS:
 
                 final_query = f"select * from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
 
-                columns_database = driver.get_database_columns()
+                columns_database = driver.get_database_columns(driver.db_config.dataset_table_name)
 
                 data_retreived = driver.execute_query(final_query)
+                uri_column = self.uri_column
 
-                result = columns_database + data_retreived
+                # Create a list of dictionaries, where each dictionary represents a row
+                # Also, extract the URIs separately
+                records = []
+                uris = []
 
-                # final_query = f"select {', '.join(summarized_input.user_requested_columns)} from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
-                # data_retreived = str(driver.execute_query(final_query))
-                # result = f"{summarized_input.user_requested_columns}\n\n{data_retreived}"
+                for row in data_retreived:
+                    record = dict(zip(columns_database, row))
+                    if uri_column in record:
+                        uris.append(str(record[uri_column]))
+                        del record[uri_column]  # Remove the URI column data from the record
+                    records.append(record)
+
+                result = NLQSResult(records=records, uris=uris)
+                print(f"result: {result}")
 
                 logger.info(f"result: {result}")
 
             else:
-                result = ["No results found"]
+                result = NLQSResult(records=[], uris=[])
 
         return result

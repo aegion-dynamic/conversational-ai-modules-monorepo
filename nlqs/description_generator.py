@@ -12,6 +12,11 @@ from nlqs.database.postgres import PostgresDriver
 import pandas as pd
 
 
+# 1. pass the data in the databse
+# 2. for each column in the table create a sample data for 5 non empty rows and remove '{|}'
+# 3. pass the column name, it's data type and the sample data into the llm to generate desccriptions
+# 4. in the instruction for llm, i passed some predifined descriptions to make the llm know how to write descriptions.
+# these predifined descriptions will not effect any future changes..
 def get_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, str]:
     """
     Generates the descriptions for each columns.
@@ -53,8 +58,8 @@ def get_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, str]:
                 Use the following format:
 
                 For example:
-                   "Product": "This column contains the name of the product. It is a text field and can be used for exact or partial matches.",
-                   "Category": "This column contains the category of the product. It is a text field and can be used for exact or partial matches.",
+                    "Product": "This column contains the name of the product. It is a text field and can be used for exact or partial matches.",
+                    "Category": "This column contains the category of the product. It is a text field and can be used for exact or partial matches.",
                     "MedicalBenefits": "This column contains the medical benefits of the product. It is a text field and can be used for exact or partial matches.",
                     "CustomerRating": "This column contains the customer rating of the product. It is a numerical field and can be used for exact matches or range comparisons.",
                     "PurchaseFrequency": "This column contains the frequency of product purchase. It is a text field and can be used for exact or partial matches.",

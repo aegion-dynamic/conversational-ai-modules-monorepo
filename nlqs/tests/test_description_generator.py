@@ -8,8 +8,6 @@ def test_get_chroma_collection(sqlite_driver):
 
     chroma_client = chromadb.PersistentClient()
 
-    sqlite_config = SQLiteConnectionConfig(db_file=Path("aegion.db"), dataset_table_name="new_dataset")
-
     db_driver = sqlite_driver
 
     db_driver.connect()

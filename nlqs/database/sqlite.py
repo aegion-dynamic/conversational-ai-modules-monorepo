@@ -1,12 +1,10 @@
-import logging
 import re
 import sqlite3
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
-
+import logging
 import pandas as pd
-
+from pathlib import Path
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
 from nlqs.database.abstract_driver import AbstractDriver
 
 # Create a logger object
@@ -20,6 +18,7 @@ logger.setLevel(logging.INFO)
 class SQLiteConnectionConfig:
     db_file: Path
     dataset_table_name: str
+    uri_column: Optional[str] = None
 
 
 class SQLiteDriver(AbstractDriver):
@@ -94,21 +93,26 @@ class SQLiteDriver(AbstractDriver):
             logger.error(f"Error retrieving descriptions and types: {e}")
             return {}, [], []
 
-    def get_database_columns(self) -> List[str]:
-        """Returns the columns in the database or table
+    def get_database_columns(self, table_name: str) -> List[str]:
+        """Returns the columns in the specified table in the order they appear in the database.
+
+        Args:
+            table_name (str): The name of the table from which to retrieve columns.
 
         Raises:
-            ValueError: Error retrieving columns
+            ValueError: Error retrieving columns.
 
         Returns:
-            columns (List[str]): columns in the database
+            List[str]: The columns in the database table in order.
         """
         if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
+
         try:
-            self.cursor.execute("SELECT column_name FROM column_types")
-            columns = self.cursor.fetchall()
-            return columns
+            self.cursor.execute(f"PRAGMA table_info({table_name})")
+            columns_info = self.cursor.fetchall()
+            columns_in_database = [column[1] for column in columns_info]  # The second field is the column name
+            return columns_in_database
         except sqlite3.Error as e:
             logger.error(f"Error retrieving columns: {e}")
             return []
