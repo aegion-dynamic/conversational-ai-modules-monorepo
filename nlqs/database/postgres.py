@@ -78,12 +78,10 @@ class PostgresDriver(AbstractDriver):
         if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
         try:
-            print(f"Executing query: {query}")
+            logger.info(f"Executing query: {query}")
             self.cursor.execute(query)
             result = self.cursor.fetchall()
             self._db_connection.commit()
-            print(f"result: {result}")
-            print("--------------------")
             logger.info(f"Query executed successfully: {result}")
             return result if result else []
         except psycopg2.Error as e:
@@ -120,7 +118,7 @@ class PostgresDriver(AbstractDriver):
             logger.error(f"Error retrieving descriptions and types: {e}")
             return {}, [], []
 
-    def database_columns(self) -> List[str]:
+    def get_database_columns(self) -> List[str]:
         """Returns the columns in the database or table
 
         Raises:

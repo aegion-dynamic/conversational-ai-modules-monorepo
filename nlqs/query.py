@@ -236,9 +236,9 @@ def qualitative_search(collection: chromadb.Collection, data: Dict[str, str], pr
     ids_per_column = {}
 
     for column, condition in data.items():
-        query_result = collection.query(query_texts=condition, n_results=5, where={"column_name": column})
+        query_result: chromadb.QueryResult = collection.query(query_texts=condition, n_results=5, where={"column_name": column})
 
-        if query_result:
+        if query_result["metadatas"]:
             ids_for_column = set()
             for result in query_result["metadatas"]:
                 for item in result:

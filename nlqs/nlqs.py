@@ -43,8 +43,7 @@ logger.addHandler(file_handler)
 @dataclass
 class ChromaDBConfig:
     collection_name: str
-    """removed persistant path because the it being passes down as a str rather than Path. 
-    I tried to convert it into path, but no use."""
+    persist_path: Path = Path("./chroma")
     host: str = "localhost"
     port: int = 8000
     is_local: bool = True
@@ -219,7 +218,7 @@ class NLQS:
 
                 final_query = f"select * from {driver.db_config.dataset_table_name} where {primary_key} in ({','.join(str(id) for id in intersection_ids)})"
 
-                columns_database = driver.database_columns()
+                columns_database = driver.get_database_columns()
 
                 data_retreived = driver.execute_query(final_query)
 

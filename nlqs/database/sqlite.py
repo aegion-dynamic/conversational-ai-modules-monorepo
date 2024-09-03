@@ -94,7 +94,7 @@ class SQLiteDriver(AbstractDriver):
             logger.error(f"Error retrieving descriptions and types: {e}")
             return {}, [], []
 
-    def database_columns(self) -> List[str]:
+    def get_database_columns(self) -> List[str]:
         """Returns the columns in the database or table
 
         Raises:

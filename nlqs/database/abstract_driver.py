@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import pandas as pd
+from typing import List
 
 
 class AbstractDriver(ABC):
@@ -29,4 +30,8 @@ class AbstractDriver(ABC):
 
     @abstractmethod
     def validate_query(self, query):
+        raise NotImplementedError("This method must be implemented by the subclass")
+
+    @abstractmethod
+    def get_database_columns(self) -> List[str]:
         raise NotImplementedError("This method must be implemented by the subclass")
