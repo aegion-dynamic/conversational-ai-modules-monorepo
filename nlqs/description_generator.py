@@ -34,11 +34,15 @@ def get_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, str]:
     descriptions = {}
 
     for column in dataframe.columns:
-        # Get column data
+        # for each column get data and create sample data using five non empty rows and reomve any specials characters.
         col_data = dataframe[column]
+        # get the data type of the column
         col_type = col_data.dtype
+        # get the sample data from five non empty rows for the column
         sample_data = dataframe[column].dropna().sample(min(5, len(dataframe[column]))).tolist()
+        # mapping column name and the column data
         sample_data_str = ", ".join(map(str, sample_data))
+        # removing { } because the llm cannot handle some special characters.
         sample_data_str = re.sub("{|}", "", sample_data_str)
 
         # Prepare the prompt
