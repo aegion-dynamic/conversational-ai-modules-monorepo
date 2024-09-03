@@ -3,7 +3,7 @@ import chromadb
 from nlqs.database.postgres import PostgresDriver, PostgresConnectionConfig
 from nlqs.database.sqlite import SQLiteDriver, SQLiteConnectionConfig
 import re
-from typing import Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 from nlqs.description_generator import generate_column_description, get_chroma_collection
 from nlqs.query import (
     generate_quantitaive_serach_query,
@@ -47,7 +47,7 @@ class ChromaDBConfig:
 
 @dataclass
 class NLQSResult:
-    records: List[Dict[str, str]]
+    records: List[Dict[str, Any]]
     uris: List[str]
 
 

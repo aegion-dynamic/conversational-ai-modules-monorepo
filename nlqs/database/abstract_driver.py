@@ -35,3 +35,7 @@ class AbstractDriver(ABC):
     @abstractmethod
     def get_database_columns(self, table_name: str) -> List[str]:
         raise NotImplementedError("This method must be implemented by the subclass")
+
+    @abstractmethod
+    def get_primary_key(self, table_name: str) -> str:
+        raise NotImplementedError("This method must be implemented by the subclass")
