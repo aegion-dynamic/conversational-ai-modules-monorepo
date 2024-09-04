@@ -5,8 +5,7 @@ from openai.types.chat.chat_completion_system_message_param import ChatCompletio
 
 class IntentClassifier:
     def __init__(self, api_key: str, classification_prompt: Optional[str] = None):
-        self.api_key = api_key
-        openai.api_key = self.api_key
+        openai.api_key = api_key
         self.classification_prompt = classification_prompt or self.default_classification_prompt()
 
     @staticmethod
@@ -34,9 +33,9 @@ class IntentClassifier:
         ]
 
         response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=messages,
-            max_tokens=1,
+            max_tokens=100,
             n=1,
             temperature=0.3
         )

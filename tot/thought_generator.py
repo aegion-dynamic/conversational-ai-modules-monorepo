@@ -37,9 +37,9 @@ class ThoughtGenerator:
         ]
         
         response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=messages,
-            max_tokens=100,
+            # max_tokens=100,
             n=1,
             temperature=0.7
         )

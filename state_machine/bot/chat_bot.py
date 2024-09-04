@@ -1,7 +1,7 @@
 import json
 import logging
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple
 from state_machine.bot.prompts import get_json_output_prompt, get_classification_prompt, get_thought_generation_prompt, get_evaluation_prompt, get_sample_data
 from state_machine.bot.session import initialize_session_data, update_session_data
 from tot.tree_of_thoughts_executor import TreeOfThoughtsExecutor, ToTExecutorInputs
@@ -39,7 +39,7 @@ class CannabisRecommendationBot:
             raise ValueError("OPENAI_API_KEY not found in environment variables")
         return api_key
 
-    def process_user_input(self, user_input: str) -> str:
+    def process_user_input(self, user_input: str, chat_history: List[Tuple[str, str]]) -> str:
         """
         Process the user input by executing the Tree of Thoughts framework and returning the bot's response.
 
@@ -53,7 +53,7 @@ class CannabisRecommendationBot:
 
         try:
             tot_input = self._prepare_tot_input(user_input)
-            tot_output = self.executor.execute(user_query=tot_input)
+            tot_output = self.executor.execute(user_query=tot_input, chat_history=chat_history)
         except Exception as e:
             logging.error(f"Error occurred while executing Tree of Thoughts: {str(e)}")
             return "I'm sorry, but I'm having trouble processing your request right now. Could you please try again?"
@@ -75,7 +75,7 @@ class CannabisRecommendationBot:
         Returns:
             str: Formatted input string for the executor.
         """
-        return f"User Query: {user_input}\nConversation History: {json.dumps(self.session_data)}\nAsked Questions: {json.dumps(list(self.asked_questions))}"
+        return f"User Query: {user_input}\n"
 
     def _log_user_input(self, user_input: str):
         """

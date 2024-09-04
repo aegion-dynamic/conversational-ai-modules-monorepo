@@ -1,3 +1,4 @@
+import re
 import openai
 import json
 import logging
@@ -9,19 +10,17 @@ from tot.state_evaluator import StateEvaluator
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
 from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
 
+
 class TreeOfThoughts:
     def __init__(
-        self, 
-        api_key: str, 
+        self,
+        api_key: str,
         sample_data: str,
         classification_prompt: str,
-        thought_generation_prompt: str,
+        thought_generation_prompt: Optional[str],
         state_evaluation_prompt: str,
-        json_output_prompt: str
+        json_output_prompt: str,
     ):
-        if not api_key or not sample_data or not classification_prompt or not thought_generation_prompt or not state_evaluation_prompt or not json_output_prompt:
-            raise ValueError("API key and all component instances must be provided")
-
         openai.api_key = api_key
 
         self.sample_data_manager = SampleDataManager(sample_data)
@@ -29,26 +28,20 @@ class TreeOfThoughts:
             api_key=api_key,
             classification_prompt=classification_prompt,
         )
-        self.thought_generator = ThoughtGenerator(
-            api_key=api_key,
-            thought_generation_prompt=thought_generation_prompt
-        )
-        self.state_evaluator = StateEvaluator(
-            api_key=api_key,
-            evaluation_prompt=state_evaluation_prompt
-        )
-        
+        self.thought_generator = ThoughtGenerator(api_key=api_key, thought_generation_prompt=thought_generation_prompt)
+        self.state_evaluator = StateEvaluator(api_key=api_key, evaluation_prompt=state_evaluation_prompt)
+
         self.json_output_prompt = json_output_prompt
-        
+
         self.logger = logging.getLogger(__name__)
 
     def solve(
-        self, 
-        user_input: str, 
-        chat_history: List[str], 
-        num_thoughts: int = 3, 
-        max_steps: int = 3, 
-        best_states_count: int = 2
+        self,
+        user_input: str,
+        chat_history: List[Tuple[str, str]],
+        num_thoughts: int = 3,
+        max_steps: int = 3,
+        best_states_count: int = 2,
     ) -> Dict[str, Any]:
         if not user_input:
             raise ValueError("user_input must not be empty")
@@ -64,13 +57,11 @@ class TreeOfThoughts:
         return self._generate_json_output(best_state, thought_path, user_input)
 
     def _tree_search(
-        self, 
-        initial_state: str, 
-        num_thoughts: int, 
-        max_steps: int, 
-        best_states_count: int
+        self, initial_state: str, num_thoughts: int, max_steps: int, best_states_count: int
     ) -> Tuple[str, List[str]]:
-        self.logger.info(f"Starting tree search with num_thoughts={num_thoughts}, max_steps={max_steps}, best_states_count={best_states_count}")
+        self.logger.info(
+            f"Starting tree search with num_thoughts={num_thoughts}, max_steps={max_steps}, best_states_count={best_states_count}"
+        )
         states = [(initial_state, [])]  # (state, path)
 
         for step in range(max_steps):
@@ -93,34 +84,25 @@ class TreeOfThoughts:
         self.logger.info("Tree search completed")
         return states[0] if states else (initial_state, [])
 
-    def _generate_json_output(
-        self, 
-        final_state: str, 
-        thought_path: List[str],
-        user_query: str
-    ) -> Dict[str, Any]:
+    def _generate_json_output(self, final_state: str, thought_path: List[str], user_query: str) -> Dict[str, Any]:
         self.logger.info("Generating JSON output")
         sample_data = self.sample_data_manager.get_sample_data() if self.sample_data_manager else ""
 
         prompt = self.json_output_prompt.format(
-            user_query=user_query,
-            final_state=final_state,
-            thought_path=thought_path,
-            sample_data=sample_data
+            user_query=user_query, final_state=final_state, thought_path=thought_path, sample_data=sample_data
         )
 
         messages = [
-            ChatCompletionSystemMessageParam(role="system", content="You are a helpful assistant generating detailed JSON output based on analysis results."),
-            ChatCompletionUserMessageParam(role="user", content=prompt)
+            ChatCompletionSystemMessageParam(
+                role="system",
+                content="You are a helpful assistant generating detailed JSON output based on analysis results.",
+            ),
+            ChatCompletionUserMessageParam(role="user", content=prompt),
         ]
 
         self.logger.info("Sending request to OpenAI API")
         response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            max_tokens=1000,
-            n=1,
-            temperature=0.2
+            model="gpt-4", messages=messages, n=1, temperature=0.2
         )
         self.logger.info("Received response from OpenAI API")
 
@@ -129,11 +111,8 @@ class TreeOfThoughts:
             raise ValueError("No content received in response to the OpenAI completion request")
 
         json_string = content.strip()
-        
-        if json_string.startswith('```json'):
-            json_string = json_string[7:]
-        if json_string.endswith('```'):
-            json_string = json_string[:-3]
+
+        json_string = re.sub("```json|```", "", json_string)
         json_string = json_string.strip()
 
         try:

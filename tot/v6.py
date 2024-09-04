@@ -2,13 +2,14 @@ import os
 import json
 import uuid
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 from dotenv import load_dotenv
-from tree_of_thoughts_executor import TreeOfThoughtsExecutor, ToTExecutorInputs
+from dataclasses import dataclass
+from tot.tree_of_thoughts_executor import TreeOfThoughtsExecutor, ToTExecutorInputs
 import logging
 
 # Define the log directory and file path
-log_directory = r'conversational-ai-modules-monorepo\state_machine\logs'
+log_directory = r'logs'
 log_file = os.path.join(log_directory, 'cannabis_bot.log')
 
 # Create the log directory if it does not exist
@@ -20,6 +21,12 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+@dataclass
+class TreeOfThoughtsOutputs:
+    description: str
+    options: List[Dict[str, str]]
+    final_recommendation: Optional[str] = None
 
 class CannabisRecommendationBot:
     def __init__(self):
@@ -112,10 +119,20 @@ class CannabisRecommendationBot:
 
     def get_thought_generation_prompt(self) -> str:
         return """
-        Given the current conversation state and user input, generate potential follow-up questions, responses, or recommendations in the cannabis recommendation process.
-        Use the following sample data structure to guide your questions:
+        Given the current state of the problem:
 
+        {current_state}
+
+        Generate {num_thoughts} possible next thoughts or considerations. Each thought should provide a new perspective or additional information that could be relevant to addressing the problem.
+
+        Your response should be in the following format:
+        1. [First thought]
+        2. [Second thought]
+        ...
+        {num_thoughts}. [Last thought]
         
+        generate potential follow-up questions, responses, or recommendations in the cannabis recommendation process. 
+        Use the following sample data structure to guide your questions:
 
         Consider the following aspects based on the sample data columns:
         1. Product Category: Ask about preferred consumption methods (e.g., Tincture, Vaporizer, Edible, Capsule, Flower)
@@ -151,7 +168,7 @@ class CannabisRecommendationBot:
         Sativa Flower,Flower,20,180,Immediate,Medium,Energizing,Day
         Indica Flower,Flower,30,220,Immediate,Medium,Relaxing,Night"""
 
-    def process_user_input(self, user_input: str) -> str:
+    def process_user_input(self, user_input: str, chat_history: List[Tuple[str, str]]) -> Dict[str, Any]:
         if not self.session_data["user_context"]["initial_query"]:
             self.session_data["user_context"]["initial_query"] = {
                 "text": user_input,
@@ -163,21 +180,22 @@ class CannabisRecommendationBot:
             "timestamp": datetime.now().isoformat()
         })
         
-        tot_input = f"User Query: {user_input}\nConversation History: {json.dumps(self.session_data)}\nAsked Questions: {json.dumps(list(self.asked_questions))}"
+        tot_input = f"User Query: {user_input}\n"
+        
         
         try:
-            tot_output = self.executor.execute(user_query=tot_input)
+            tot_output = self.executor.execute(user_query=tot_input, chat_history=chat_history)
         except Exception as e:
             logging.error(f"Error occurred while executing Tree of Thoughts: {str(e)}")
-            return "I'm sorry, but I'm having trouble processing your request right now. Could you please try again?"
+            return {}
 
         if not tot_output or not isinstance(tot_output, dict) or 'response' not in tot_output:
             logging.error(f"Invalid response received from Tree of Thoughts executor: {tot_output}")
-            return "I apologize, but I received an invalid response. Could you please rephrase your question?"
+            return {}
 
         self.update_session_data(tot_output)
         
-        return self.format_response(tot_output)
+        return tot_output
 
     def update_session_data(self, tot_output: Dict[str, Any]):
         response = tot_output["response"]
@@ -205,25 +223,25 @@ class CannabisRecommendationBot:
             if entity not in self.session_data["cannabis_preferences"]:
                 self.session_data["cannabis_preferences"][entity] = True
 
-    def format_response(self, tot_output: Dict[str, Any]) -> str:
-        response = tot_output["response"]
+    # def format_response(self, tot_output: Dict[str, Any]) -> str:
+    #     response = tot_output["response"]
         
-        if response["type"] == "question":
-            return self.format_question(response)
-        elif response["type"] == "recommendation":
-            return self.format_recommendation(tot_output)
-        else:
-            return response["text"]
+    #     if response["type"] == "question":
+    #         return self.format_question(response)
+    #     elif response["type"] == "recommendation":
+    #         return self.format_recommendation(tot_output)
+    #     else:
+    #         return response["text"]
 
-    def format_question(self, response: Dict[str, Any]) -> str:
-        question = response["text"]
-        options = response.get("options", [])
+    # def format_question(self, response: Dict[str, Any]) -> str:
+    #     question = response["text"]
+    #     options = response.get("options", [])
         
-        if options:
-            options_str = "\n".join(f"{chr(97 + i)}. {opt}" for i, opt in enumerate(options))
-            return f"{question}\n\n{options_str}"
-        else:
-            return question
+    #     if options:
+    #         options_str = "\n".join(f"{chr(97 + i)}. {opt}" for i, opt in enumerate(options))
+    #         return f"{question}\n\n{options_str}"
+    #     else:
+    #         return question
 
     def format_recommendation(self, tot_output: Dict[str, Any]) -> str:
         recommendation = tot_output.get("recommendation")
@@ -253,7 +271,7 @@ def main():
     bot = CannabisRecommendationBot()
     print("Welcome to the Cannabis Recommendation Bot!")
     print("How can I assist you in finding the right cannabis product today?")
-
+    chat_history = []
     while True:
         user_input = input("You: ").strip()
         if user_input.lower() in ["exit", "quit", "bye"]:
@@ -263,8 +281,26 @@ def main():
             print("\nGoodbye!")
             break
         
-        response = bot.process_user_input(user_input)
-        print(f"\nBot: {response}")
+        response = bot.process_user_input(user_input, chat_history)
+        if not response:
+            print("I'm sorry, but I'm having trouble processing your request right now. Could you please try again?")
+
+        recommendation_result = ""
+        if response["response"]["type"] == "recommendation":
+            recommendation_result =  bot.format_recommendation(response)
+
+        # response = json.loads(response)
+        description = response.get("response","").get("text","")
+        options = response.get("response", "").get("options", "")
+        formatted_options = [{chr(97 + i): opt} for i, opt in enumerate(options)]
+
+        
+        result = TreeOfThoughtsOutputs(description, formatted_options, recommendation_result)
+        print(f"Description: {result.description}")
+        print(f"Options: {result.options}")
+
+        chat_history.append((user_input, result))
+        print(f"chat history: {chat_history}")
         
         print("\nRAG Analysis:")
         print(json.dumps(bot.session_data["rag_analysis"], indent=4))

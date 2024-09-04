@@ -53,7 +53,19 @@ def get_classification_prompt() -> str:
 
 def get_thought_generation_prompt() -> str:
         return """
-        Given the current conversation state and user input, generate potential follow-up questions, responses, or recommendations in the cannabis recommendation process.
+        Given the current state of the problem:
+
+        {current_state}
+
+        Generate {num_thoughts} possible next thoughts or considerations. Each thought should provide a new perspective or additional information that could be relevant to addressing the problem.
+
+        Your response should be in the following format:
+        1. [First thought]
+        2. [Second thought]
+        ...
+        {num_thoughts}. [Last thought]
+        
+        generate potential follow-up questions, responses, or recommendations in the cannabis recommendation process.
         Use the following sample data structure to guide your questions:
 
         
@@ -69,6 +81,8 @@ def get_thought_generation_prompt() -> str:
         Generate thoughts about what information is still needed, what cannabis product recommendations might be appropriate, or what information should be provided to the user based on the conversation so far.
         Ensure that follow-up questions and options are diverse, not repetitive, and tailored to the specific context of the conversation.
         For each question, provide a list of relevant options for the user to choose from, based on the unique values in the sample data.
+        
+        Make sure you do not repeat the same thought twice.
         """
 
 def get_evaluation_prompt() -> str:
