@@ -106,7 +106,7 @@ Los Angeles,Bedroom,THC Gummies,Edibles,PKG002,B002,0,100,0,0,0,0,4.8,Relaxation
         )
         
         # Execute the problem-solving process
-        output = executor.execute(user_query=user_query)
+        output = executor.execute(user_query=user_query, chat_history=[])
         print(output)
         # Print the result in a formatted JSON structure
         print(json.dumps(output, indent=2))

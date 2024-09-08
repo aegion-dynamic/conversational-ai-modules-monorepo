@@ -147,7 +147,7 @@ class CannabisRecommendationBot:
         tot_input = f"User Query: {user_input}\nConversation History: {json.dumps(self.session_data)}\nAsked Questions: {json.dumps(list(self.asked_questions))}"
         
         try:
-            tot_output = self.executor.execute(user_query=tot_input)
+            tot_output = self.executor.execute(user_query=tot_input, chat_history=[])
         except Exception as e:
             logging.error(f"Error occurred while executing Tree of Thoughts: {str(e)}")
             return "I'm sorry, but I'm having trouble processing your request right now. Could you please try again?"
