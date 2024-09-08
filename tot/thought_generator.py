@@ -1,16 +1,24 @@
 import openai
-from typing import List, Optional
+from typing import List, Literal, LiteralString, Optional
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
 from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
 
 class ThoughtGenerator:
     def __init__(self, api_key: str, thought_generation_prompt: Optional[str] = None):
+        """ThoughtGenerator class for generating thoughts for problem-solving.
+
+        Args:
+            api_key (str): 
+            thought_generation_prompt (Optional[str], optional): _description_. Defaults to None.
+        """
         self.api_key = api_key
         openai.api_key = self.api_key
         self.thought_generation_prompt = thought_generation_prompt or self.default_thought_generation_prompt()
 
     @staticmethod
-    def default_thought_generation_prompt():
+    def default_thought_generation_prompt() -> LiteralString:
+        """Return the default thought generation prompt for the thought generator."""
+        
         return """
         Given the current state of the problem:
 
@@ -26,6 +34,18 @@ class ThoughtGenerator:
         """
 
     def generate_thoughts(self, current_state: str, num_thoughts: int) -> List[str]:
+        """Generate thoughts for problem-solving based on the current state.
+
+        Args:
+            current_state (str): The current state of the problem.
+            num_thoughts (int): The number of thoughts to generate.
+
+        Raises:
+            Exception: If no thoughts are generated.
+
+        Returns:
+            List[str]: A list of generated thoughts.
+        """
         prompt = self.thought_generation_prompt.format(
             current_state=current_state,
             num_thoughts=num_thoughts

@@ -5,6 +5,15 @@ from openai.types.chat.chat_completion_system_message_param import ChatCompletio
 
 class IntentClassifier:
     def __init__(self, api_key: str, classification_prompt: Optional[str] = None):
+        """
+        Classify the intent of the user input using OpenAI's GPT model.
+
+        Args:
+            user_input (str): The user's input to classify.
+
+        Returns:
+            str: The classified intent as a string (1-5).
+        """
         openai.api_key = api_key
         self.classification_prompt = classification_prompt or self.default_classification_prompt()
 
@@ -26,6 +35,14 @@ class IntentClassifier:
         """
 
     def classify_intent(self, user_input: str) -> str:
+        """Classify the intent of the user input.
+
+        Args:
+            user_input (str): The user's input to classify.
+
+        Returns:
+            str: The classified intent as a string (1-5).
+        """
         prompt = self.classification_prompt.format(user_input=user_input)
         messages = [
             ChatCompletionSystemMessageParam(role="system", content="You are a helpful assistant classifying user intent."),

@@ -12,6 +12,13 @@ from openai.types.chat.chat_completion_system_message_param import ChatCompletio
 
 
 class TreeOfThoughts:
+    """
+    A class to implement the Tree of Thoughts methodology for processing user input and generating analysis.
+
+    This class orchestrates the process of intent classification, thought generation, state evaluation,
+    and final output generation based on user input and sample data.
+    """
+
     def __init__(
         self,
         api_key: str,
@@ -21,6 +28,16 @@ class TreeOfThoughts:
         state_evaluation_prompt: str,
         json_output_prompt: str,
     ):
+        """ Initialize the TreeOfThoughts class with the required parameters.
+
+        Args:
+            api_key (str): The OpenAI API key.
+            sample_data (str): The sample data to be used in the analysis.
+            classification_prompt (str): The prompt for classifying the user's intent.
+            thought_generation_prompt (Optional[str]): The prompt for generating thoughts.
+            state_evaluation_prompt (str): The prompt for evaluating the state.
+            json_output_prompt (str): The prompt for generating the final JSON output.
+        """
         openai.api_key = api_key
 
         self.sample_data_manager = SampleDataManager(sample_data)
@@ -43,6 +60,22 @@ class TreeOfThoughts:
         max_steps: int = 3,
         best_states_count: int = 2,
     ) -> Dict[str, Any]:
+        """Solve the problem based on the user input and chat history.
+
+        Args:
+            user_input (str): The user's query or input.
+            chat_history (List[str]): The history of the chat conversation.
+            num_thoughts (int, optional): Number of thoughts to generate at each step. Defaults to 3.
+            max_steps (int, optional): Maximum number of steps for the tree search. Defaults to 3.
+            best_states_count (int, optional): Number of best states to retain at each step. Defaults to 2.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing the summary, quantitative data, qualitative data, 
+                            user requested columns, and intent.
+
+        Raises:
+            ValueError: If the user_input is empty.
+        """
         if not user_input:
             raise ValueError("user_input must not be empty")
 

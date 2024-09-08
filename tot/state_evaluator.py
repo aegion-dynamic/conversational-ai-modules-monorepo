@@ -1,16 +1,24 @@
 import openai
-from typing import List, Optional
+from typing import List, Literal, LiteralString, Optional
 from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
 from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
 
 class StateEvaluator:
     def __init__(self, api_key: str, evaluation_prompt: Optional[str] = None):
+        """StateEvaluator class for evaluating problem-solving states.
+
+        Args:
+            api_key (str): _description_
+            evaluation_prompt (Optional[str], optional): _description_. Defaults to None.
+        """
         self.api_key = api_key
         self.evaluation_prompt = evaluation_prompt or self.default_evaluation_prompt()
 
     @staticmethod
-    def default_evaluation_prompt():
+    def default_evaluation_prompt() -> LiteralString:
+        """Return the default evaluation prompt for the state evaluator."""
+
         return """
         Evaluate the following states in terms of their relevance and usefulness for addressing the problem. Rate each state on a scale of 0 to 10, where 10 is the most relevant and useful.
 
@@ -20,6 +28,14 @@ class StateEvaluator:
         """
 
     def evaluate_states(self, states: List[str]) -> List[float]:
+        """Evaluate the problem-solving states based on their relevance and usefulness.
+
+        Args:
+            states (List[str]): A list of problem-solving states to evaluate.
+
+        Returns:
+            List[float]: A list of numerical ratings for each state.
+        """
         states_text = "\n".join(f"{i+1}. {state}" for i, state in enumerate(states))
         
         prompt = self.evaluation_prompt.format(states_text=states_text)
