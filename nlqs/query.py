@@ -228,6 +228,9 @@ def qualitative_search(collection: chromadb.Collection, data: Dict[str, str], pr
     Returns:
         List[int]: A list of unique IDs from the search results.
     """
+    if not data:
+        return []
+    
     ids_per_column = {}
 
     for column, condition in data.items():

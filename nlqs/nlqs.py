@@ -209,14 +209,14 @@ class NLQS:
                 print(f"qualitative_ids: {qualitative_ids}")
 
                 # Find the intersection of quantitative_ids and qualitative_ids
-                if not quantitative_ids:
-                    intersection_ids = qualitative_ids
-                elif not qualitative_ids:
-                    intersection_ids = quantitative_ids
+                if not quantitative_ids or not qualitative_ids:
+                    intersection_ids = quantitative_ids or qualitative_ids
                 else:
                     intersection_ids = list(set(quantitative_ids) & set(qualitative_ids))
 
-                print(intersection_ids)
+                # Ensure intersection_ids is set to qualitative_ids if it's empty
+                if not intersection_ids:
+                    intersection_ids = qualitative_ids
 
                 # Initial query to retrieve all columns based on the intersection IDs
                 final_query = f"SELECT * FROM {self.table_name} WHERE {primary_key} IN ({','.join(str(id) for id in intersection_ids)})"
