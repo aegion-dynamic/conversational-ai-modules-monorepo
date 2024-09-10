@@ -5,12 +5,10 @@
 import csv
 import os
 from pathlib import Path
-from pathlib import Path
 import re
 
 import chromadb
 from langchain_openai import ChatOpenAI
-from pydantic.v1 import SecretStr
 from pydantic.v1 import SecretStr
 
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
@@ -38,10 +36,6 @@ BENCHMARK_RESULTS_FILE = "benchmark_results.csv"
 
 chroma_client = chromadb.PersistentClient()
 chroma_collection = get_chroma_collection(chroma_config.collection_name, chroma_client, driver, primary_key)
-chroma_client = chromadb.PersistentClient()
-chroma_collection = get_chroma_collection(chroma_config.collection_name, chroma_client, driver, primary_key)
-
-llm = ChatOpenAI(temperature=0, model="gpt-4-turbo", api_key=SecretStr(OPENAI_API_KEY), max_tokens=1000)
 
 llm = ChatOpenAI(temperature=0, model="gpt-4-turbo", api_key=SecretStr(OPENAI_API_KEY), max_tokens=1000)
 
@@ -57,13 +51,9 @@ def chat_benchmark(user_input, chat_history):
     summarized_input = summarize(
         user_input, chat_history, column_descriptions, numerical_columns, categorical_columns, llm
     )
-    summarized_input = summarize(
-        user_input, chat_history, column_descriptions, numerical_columns, categorical_columns, llm
-    )
 
     if not summarized_input:
         summarized_input = summarize(
-            user_input, chat_history, column_descriptions, numerical_columns, categorical_columns, llm
             user_input, chat_history, column_descriptions, numerical_columns, categorical_columns, llm
         )
 
@@ -105,11 +95,13 @@ def chat_benchmark(user_input, chat_history):
         return chat_history, response, log_data
 
     if summarized_input.user_requested_columns:
-        
+
         quantitaive_data = summarized_input.quantitative_data
         qualitative_data = summarized_input.qualitative_data
 
-        quantitaive_query = generate_quantitaive_serach_query(quantitaive_data, driver.db_config.dataset_table_name, primary_key)
+        quantitaive_query = generate_quantitaive_serach_query(
+            quantitaive_data, driver.db_config.dataset_table_name, primary_key
+        )
         quantitative_ids_uncleaned = driver.execute_query(quantitaive_query)
 
         quantitative_ids = [item[0] for item in quantitative_ids_uncleaned]
@@ -126,7 +118,6 @@ def chat_benchmark(user_input, chat_history):
             intersection_ids = list(set(quantitative_ids) & set(qualitative_ids))
             log_data[8] = "Intersection data found. Exact answer retrieved."
 
-
         # Ensure intersection_ids is set to qualitative_ids if it's empty
         if not intersection_ids:
             intersection_ids = qualitative_ids
@@ -134,7 +125,7 @@ def chat_benchmark(user_input, chat_history):
 
         log_data[9] = intersection_ids
 
-         # Initial query to retrieve all columns based on the intersection IDs
+        # Initial query to retrieve all columns based on the intersection IDs
         final_query = f"SELECT * FROM {driver.db_config.dataset_table_name} WHERE {primary_key} IN ({','.join(str(id) for id in intersection_ids)})"
 
         # Get the columns in the order they appear in the database
