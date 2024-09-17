@@ -25,46 +25,38 @@ class SQLiteConnectionConfig:
 class SQLiteDriver(AbstractDriver):
     def __init__(self, sqlite_config: SQLiteConnectionConfig):
         self.db_config = sqlite_config
-        self._db_connection = None
-        self.cursor = None
+        self.engine = None
+        self.Session = None
 
     def connect(self):
         try:
-            self._db_connection = sqlite3.connect(self.db_config.db_file)
-            self.cursor = self._db_connection.cursor()
-            logger.info("Connected to SQLite database.")
-            print(f"Connected to SQLite database.")
-        except sqlite3.Error as e:
-            logger.error(f"Error connecting to database: {e}")
+            # Create an engine with connection pool
+            self.engine = create_engine(f"sqlite:///{self.db_config.db_file.absolute()}", echo=True, future=True)
+            self.Session = sessionmaker(bind=self.engine)
+            logger.info("Connected to SQLite database with connection pool.")
+        except SQLAlchemyError as e:
+            logger.error(f"Error connecting to database with connection pool: {e}")
             raise e
 
     def disconnect(self):
-        if self._db_connection:
-            self._db_connection.close()
-            logger.info("Disconnected from SQLite database.")
+        # In SQLAlchemy, connections are returned to the connection pool after session.close()
+        # There's no need to explicitly close the engine
+        logger.info("Disconnected from SQLite database.")
 
     def execute_query(self, query: str) -> List[str]:
-        """Executes the SQL query and returns the result.
-
-        Args:
-            query (str): the SQL query.
-
-        Returns:
-            List[str]: the result of the query.
-        """
-        if self.cursor is None or self._db_connection is None:
-            raise ValueError("Database connection not established.")
+        session = self.Session()
         try:
-            print(f"Executing query: {query}")
-            self.cursor.execute(query)
-            result = self.cursor.fetchall()
-            self._db_connection.commit()
+            result = session.execute(text(query)).fetchall()
+            session.commit()
             logger.info(f"Query executed successfully: {result}")
             return result if result else []
-        except sqlite3.Error as e:
+        except SQLAlchemyError as e:
+            session.rollback()
             error_message = f"Error executing SQL query: {e}"
             logger.error(error_message)
             raise e
+        finally:
+            session.close()
 
     def retrieve_descriptions_and_types_from_db(self) -> Tuple[Dict[str, str], List[str], List[str]]:
         """Retrieves descriptions and types from the SQLite database.
