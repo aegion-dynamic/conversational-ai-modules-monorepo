@@ -6,6 +6,8 @@ import sqlite3
 from sqlalchemy.exc import SQLAlchemyError
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
 from sqlalchemy import text
+import threading
+import time
 
 
 @pytest.fixture(scope="function")
@@ -250,3 +252,34 @@ def test_get_primary_key_multiple_primary_keys(setup_database):
     driver.connect()
     with pytest.raises(ValueError, match="Multiple primary keys found"):
         driver.get_primary_key("test_table_multiple_pk")
+
+
+def test_multithreading(setup_database):
+    """Test that multiple threads can access the database simultaneously."""
+    driver = setup_database
+    driver.connect()
+
+    # Define a function to be executed in multiple threads
+    def insert_data(name, value):
+        with driver.Session() as session:
+            session.execute(
+                text("INSERT INTO test_table (name, value) VALUES (:name, :value)"),
+                {"name": name, "value": value},
+            )
+            session.commit()
+
+    # Create and start multiple threads
+    threads = []
+    for i in range(5):
+        thread = threading.Thread(target=insert_data, args=(f"Thread-{i}", i * 10))
+        threads.append(thread)
+        thread.start()
+
+    # Wait for all threads to complete
+    for thread in threads:
+        thread.join()
+
+    # Check if all data was inserted correctly
+    with driver.Session() as session:
+        result = session.execute(text("SELECT * FROM test_table")).fetchall()
+        assert len(result) == 7  # 2 initial rows + 5 from threads
