@@ -18,9 +18,6 @@ from expert_system.parameters import (
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
-
 
 def query_template(
     previous_messages: Optional[List[Union[HumanMessage, AIMessage]]] = None,
@@ -61,6 +58,7 @@ def query_template(
 
         Other Notes: Avoid self-referencing or mentioning "I," "we," or "AI" in the output. Directly provide the information without referencing the speaker. If you receive any links in the input, please highlight them in the output.""",
         ),
+        ("user", "{context} and retrived data: {retrieved_data}"),
         ("user", "{context} and retrived data: {retrieved_data}"),
     ]
 
