@@ -72,20 +72,33 @@ class PostgresDriver(AbstractDriver):
             query (str): the SQL query.
 
         Returns:
-            List[str]: the result of the query.
+            List[str]: the result of the query, or an empty list if no results.
         """
+        print(f"Executing query: {query}")
+
+        if not query.strip():
+            return []
+
         if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
         try:
             logger.info(f"Executing query: {query}")
+
             self.cursor.execute(query)
-            result = self.cursor.fetchall()
-            self._db_connection.commit()
-            final_result = [res[0] for res in result]
-            logger.info(f"Query executed successfully: {result}")
-            return final_result if final_result else []
+
+            # Only fetch results if the query is a SELECT statement
+            if query.lower().startswith("select"):
+                result = self.cursor.fetchall()
+                self._db_connection.commit()
+                logger.info(f"Query executed successfully: {result}")
+                return result if result else []  # Return the full result here
+            else:
+                self._db_connection.commit()
+                logger.info(f"Query executed successfully.")
+                return []  # Return an empty list for non-SELECT queries=
         except psycopg2.Error as e:
             error_message = f"Error executing SQL query: {e}"
+            print(error_message)
             logger.error(error_message)
             raise e
 
@@ -116,6 +129,8 @@ class PostgresDriver(AbstractDriver):
             return descriptions, numerical_columns, categorical_columns
         except psycopg2.Error as e:
             logger.error(f"Error retrieving descriptions and types: {e}")
+            # roll back the failed sql query
+            self._db_connection.rollback()
             return {}, [], []
 
     def get_database_columns(self, table_name: str) -> List[str]:
@@ -134,9 +149,11 @@ class PostgresDriver(AbstractDriver):
             raise ValueError("Database connection not established.")
 
         try:
-            self.cursor.execute(f"PRAGMA table_info({table_name})")
+            self.cursor.execute(
+                sql.SQL("SELECT column_name FROM information_schema.columns WHERE table_name = %s"), [table_name]
+            )
             columns_info = self.cursor.fetchall()
-            columns_in_database = [column[1] for column in columns_info]  # The second field is the column name
+            columns_in_database = [column[0] for column in columns_info]  # Extract column names
             return columns_in_database
         except psycopg2.Error as e:
             logger.error(f"Error retrieving columns: {e}")
@@ -205,41 +222,50 @@ class PostgresDriver(AbstractDriver):
             conn = self._db_connection
             query = f"SELECT * FROM {table_name}"
             df = pd.read_sql_query(query, conn)  # type: ignore
-            conn.close()
         except psycopg2.Error as e:
             logger.error(f"Error fetching data: {e}")
+            if self._db_connection:
+                self._db_connection.rollback()  # Rollback the transaction on error
             return pd.DataFrame()  # Return an empty DataFrame on error
 
         return df
 
     def get_primary_key(self, table_name: str) -> str:
         """
-        Retrieves the primary key column name from a SQLite table.
+        Retrieves the primary key column name from a PostgreSQL table.
 
         Args:
             table_name (str): The name of the table to check.
 
         Returns:
-            primary key (str): The name of the primary key column,
-                           or None if no primary key is found.
+            str: The name of the primary key column.
+
+        Raises:
+            ValueError: If the database connection is not established or
+                        if the table has no primary key.
+            psycopg2.Error: If there is an error executing the SQL command.
         """
         if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
 
         try:
-            self.cursor.execute(f"PRAGMA table_info({table_name})")
-            table_info = self.cursor.fetchall()
+            query = """
+                SELECT kcu.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                WHERE tc.table_name = %s AND tc.constraint_type = 'PRIMARY KEY';
+            """
+            self.cursor.execute(query, (table_name,))
+            result = self.cursor.fetchone()
 
-            for row in table_info:
-                if row[5] == 1:  # Check for primary key indicator
-                    return row[1]  # Return the column name
+            if result is None:
+                raise ValueError(f"No primary key found for table '{table_name}'.")
 
-            # No primary key found
-            raise ValueError("No primary key found in the database.")
+            return result[0]
 
         except psycopg2.Error as e:
-            print(f"Error getting primary key: {e}")
-            raise e
+            raise psycopg2.Error(f"Error getting primary key from table '{table_name}': {e}")
 
     @property
     def db_connection(self):
