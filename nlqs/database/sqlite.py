@@ -5,10 +5,7 @@ import pandas as pd
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Sequence
-
-from pytest import Session
 from sqlalchemy import create_engine, text
-import sqlalchemy
 from sqlalchemy.engine.row import Row
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
@@ -38,6 +35,8 @@ class SQLiteDriver(AbstractDriver):
 
     def connect(self):
         try:
+            if not self.db_config.db_file.exists():
+                raise ValueError(f"Database file '{self.db_config.db_file}' does not exist.")
             # Create an engine with connection pool
             self.engine = create_engine(f"sqlite:///{self.db_config.db_file.absolute()}", echo=True, future=True)
             self.Session = sessionmaker(bind=self.engine)
@@ -74,13 +73,12 @@ class SQLiteDriver(AbstractDriver):
                 session.commit()
                 logger.info(f"Query executed successfully: {result}")
                 return result if result else None
-            
+
             except SQLAlchemyError as e:
                 session.rollback()
                 error_message = f"Error executing SQL query: {e}"
                 logger.error(error_message)
                 raise e
-
 
     def retrieve_descriptions_and_types_from_db(self) -> Tuple[Dict[str, str], List[str], List[str]]:
         """Retrieves descriptions and types from the SQLite database.
@@ -96,7 +94,9 @@ class SQLiteDriver(AbstractDriver):
         # Retrieve descriptions
         with self.Session() as session:
             try:
-                description_rows = session.execute(text("SELECT column_name, description FROM column_descriptions")).fetchall()
+                description_rows = session.execute(
+                    text("SELECT column_name, description FROM column_descriptions")
+                ).fetchall()
                 descriptions = {row[0]: row[1] for row in description_rows}
 
                 # Retrieve column types
@@ -165,7 +165,10 @@ class SQLiteDriver(AbstractDriver):
                     return False
                 columns = column_match.group(1).strip().split(",")
 
-                statement = session.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name=:table_name"), {'table_name': table_name})
+                statement = session.execute(
+                    text("SELECT name FROM sqlite_master WHERE type='table' AND name=:table_name"),
+                    {"table_name": table_name},
+                )
                 if not statement.fetchone():
                     logger.error(f"Table '{table_name}' not found in the database.")
                     print(f"Table '{table_name}' not found in the database.")
@@ -204,10 +207,12 @@ class SQLiteDriver(AbstractDriver):
         with self.Session() as session:
             try:
                 result = session.execute(
-                    text("""
+                    text(
+                        """
                     SELECT name FROM sqlite_master WHERE type='table' AND name=:table_name
-                    """),
-                    {'table_name': table_name},
+                    """
+                    ),
+                    {"table_name": table_name},
                 ).fetchone()
 
                 return bool(result)  # True if result is not None, False otherwise
