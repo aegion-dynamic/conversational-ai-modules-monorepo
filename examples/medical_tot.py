@@ -3,9 +3,9 @@ import json
 import os
 from typing import LiteralString
 from dotenv import load_dotenv
-from tot.tree_of_thoughts_executor import TreeOfThoughtsExecutor, ToTExecutorInputs
-from tot.thought_generator import ThoughtGenerator
-from tot.state_evaluator import StateEvaluator
+from  tree_of_thoughts_executor import TreeOfThoughtsExecutor, ToTExecutorInputs
+from  thought_generator import ThoughtGenerator
+from  state_evaluator import StateEvaluator
 # Setup basic logging configuration
 logging.basicConfig(level=logging.INFO)
 

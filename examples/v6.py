@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import List, Dict, Any
 from dotenv import load_dotenv
-from tot.tree_of_thoughts_executor import TreeOfThoughtsExecutor, ToTExecutorInputs
+from  tree_of_thoughts_executor import TreeOfThoughtsExecutor, ToTExecutorInputs
 import logging
 
 logging.basicConfig(filename='cannabis_bot.log', level=logging.INFO, 

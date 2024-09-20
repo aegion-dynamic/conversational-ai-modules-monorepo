@@ -1,26 +1,29 @@
 import os
 import json
 import uuid
+import enum
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 from dotenv import load_dotenv
 from dataclasses import dataclass
-from  tree_of_thoughts_executor import TreeOfThoughtsExecutor, ToTExecutorInputs
 import logging
-
-# Define the log directory and file path
-log_directory = r'logs'
-log_file = os.path.join(log_directory, 'cannabis_bot.log')
-
-# Create the log directory if it does not exist
-os.makedirs(log_directory, exist_ok=True)
+from tree_of_thoughts_executor import TreeOfThoughtsExecutor, ToTExecutorInputs
 
 # Configure logging
+log_directory = 'logs'
+os.makedirs(log_directory, exist_ok=True)
 logging.basicConfig(
-    filename=log_file,
+    filename=os.path.join(log_directory, 'cannabis_bot.log'),
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+class State(enum.Enum):
+    START = "start"
+    UNDERSTANDING = "understanding"
+    CLARIFYING = "clarifying"
+    RECOMMENDING = "recommending"
+    FINISHED = "finished"
 
 @dataclass
 class TreeOfThoughtsOutputs:
@@ -47,6 +50,15 @@ class CannabisRecommendationBot:
         )
         self.session_data = self.initialize_session_data()
         self.asked_questions = set()
+        self.state = State.START
+        self.context = {
+            "problem": "",
+            "understanding": "",
+            "clarifications": [],
+            "solution": "",
+            "goal": "Initiate cannabis recommendation process",
+            "conversation_history": []
+        }
 
     def initialize_session_data(self) -> Dict[str, Any]:
         return {
@@ -168,6 +180,55 @@ class CannabisRecommendationBot:
         Sativa Flower,Flower,20,180,Immediate,Medium,Energizing,Day
         Indica Flower,Flower,30,220,Immediate,Medium,Relaxing,Night"""
 
+    def run(self):
+        print("Welcome to the Cannabis Recommendation Bot!")
+        print("How can I assist you in finding the right cannabis product today?")
+        
+        while self.state != State.FINISHED:
+            self.step()
+
+    def step(self):
+        if self.state == State.START:
+            user_input = input("You: ").strip()
+            if user_input.lower() in ["exit", "quit", "bye"]:
+                self.finish()
+                return
+
+            self.context["problem"] = user_input
+            self.state = State.UNDERSTANDING
+
+        elif self.state == State.UNDERSTANDING:
+            tot_output = self.process_user_input(self.context["problem"], self.context["conversation_history"])
+            self.update_session_data(tot_output)
+            self.print_response(tot_output)
+            
+            if tot_output["response"]["type"] == "question":
+                self.state = State.CLARIFYING
+            elif tot_output["response"]["type"] == "recommendation":
+                self.state = State.RECOMMENDING
+            else:
+                self.state = State.UNDERSTANDING
+
+        elif self.state == State.CLARIFYING:
+            user_input = input("You: ").strip()
+            self.context["clarifications"].append(user_input)
+            tot_output = self.process_user_input(user_input, self.context["conversation_history"])
+            self.update_session_data(tot_output)
+            self.print_response(tot_output)
+            
+            if tot_output["response"]["type"] == "recommendation":
+                self.state = State.RECOMMENDING
+            else:
+                self.state = State.CLARIFYING
+
+        elif self.state == State.RECOMMENDING:
+            self.print_recommendation()
+            user_input = input("Is this recommendation helpful? (yes/no): ").strip().lower()
+            if user_input == "yes":
+                self.finish()
+            else:
+                self.state = State.CLARIFYING
+
     def process_user_input(self, user_input: str, chat_history: List[Tuple[str, str]]) -> Dict[str, Any]:
         if not self.session_data["user_context"]["initial_query"]:
             self.session_data["user_context"]["initial_query"] = {
@@ -222,96 +283,41 @@ class CannabisRecommendationBot:
         for entity in response.get("entities", []):
             if entity not in self.session_data["cannabis_preferences"]:
                 self.session_data["cannabis_preferences"][entity] = True
+    def print_response(self, tot_output: Dict[str, Any]):
+        response = tot_output["response"]
+        print(f"Bot: {response['text']}")
+        if response.get("options"):
+            for i, option in enumerate(response["options"]):
+                print(f"{chr(97 + i)}. {option}")
 
-    # def format_response(self, tot_output: Dict[str, Any]) -> str:
-    #     response = tot_output["response"]
-        
-    #     if response["type"] == "question":
-    #         return self.format_question(response)
-    #     elif response["type"] == "recommendation":
-    #         return self.format_recommendation(tot_output)
-    #     else:
-    #         return response["text"]
-
-    # def format_question(self, response: Dict[str, Any]) -> str:
-    #     question = response["text"]
-    #     options = response.get("options", [])
-        
-    #     if options:
-    #         options_str = "\n".join(f"{chr(97 + i)}. {opt}" for i, opt in enumerate(options))
-    #         return f"{question}\n\n{options_str}"
-    #     else:
-    #         return question
-
-    def format_recommendation(self, tot_output: Dict[str, Any]) -> str:
-        recommendation = tot_output.get("recommendation")
+    def print_recommendation(self):
+        recommendation = self.session_data["rag_analysis"].get("recommendations", {})
         if not recommendation:
-            return "I'm sorry, but I don't have enough information to make a recommendation yet. Let me ask you a few more questions."
+            print("I'm sorry, but I don't have enough information to make a recommendation yet.")
+            return
 
-        specific_products = recommendation.get("specific_products", [])
-        if specific_products and isinstance(specific_products[0], dict):
-            specific_products_str = ", ".join(product.get('name', 'Unknown') for product in specific_products)
-        else:
-            specific_products_str = ", ".join(map(str, specific_products))
+        print("\nBased on our conversation, here's our cannabis product recommendation:")
+        print(f"Product Type: {recommendation.get('product_type', 'Not specified')}")
+        print(f"Cannabinoid Profile: {recommendation.get('cannabinoid_profile', 'Not specified')}")
+        print(f"Usage Instructions: {recommendation.get('usage_instructions', 'Not specified')}")
+        print(f"Specific Product Recommendations: {', '.join(recommendation.get('specific_products', ['Not specified']))}")
+        print("\nPlease note that this is a general recommendation. Always consult with a healthcare professional before starting any new cannabis regimen, and ensure you're aware of the legal status of cannabis products in your area.")
 
-        return f"""
-        Based on our conversation, here's our cannabis product recommendation:
+    def finish(self):
+        self.state = State.FINISHED
+        print("\nThank you for using the Cannabis Recommendation Bot.")
+        print("Here's a summary of our conversation:")
+        self.print_session_summary()
+        print("\nGoodbye!")
 
-        Product Type: {recommendation.get('product_type', 'Not specified')}
-        Cannabinoid Profile: {recommendation.get('cannabinoid_profile', 'Not specified')}
-        Usage Instructions: {recommendation.get('usage_instructions', 'Not specified')}
-        Specific Product Recommendations: {specific_products_str}
-
-        {tot_output.get('explanation', 'No additional explanation provided.')}
-
-        Please note that this is a general recommendation. Always consult with a healthcare professional before starting any new cannabis regimen, and ensure you're aware of the legal status of cannabis products in your area.
-        """
-
-def main():
-    bot = CannabisRecommendationBot()
-    print("Welcome to the Cannabis Recommendation Bot!")
-    print("How can I assist you in finding the right cannabis product today?")
-    chat_history = []
-    while True:
-        user_input = input("You: ").strip()
-        if user_input.lower() in ["exit", "quit", "bye"]:
-            print("\nThank you for using the Cannabis Recommendation Bot.")
-            print("Here's a summary of our conversation:")
-            print_session_summary(bot.session_data)
-            print("\nGoodbye!")
-            break
-        
-        response = bot.process_user_input(user_input, chat_history)
-        if not response:
-            print("I'm sorry, but I'm having trouble processing your request right now. Could you please try again?")
-
-        recommendation_result = ""
-        if response["response"]["type"] == "recommendation":
-            recommendation_result =  bot.format_recommendation(response)
-
-        # response = json.loads(response)
-        description = response.get("response","").get("text","")
-        options = response.get("response", "").get("options", "")
-        formatted_options = [{chr(97 + i): opt} for i, opt in enumerate(options)]
-
-        
-        result = TreeOfThoughtsOutputs(description, formatted_options, recommendation_result)
-        print(f"Description: {result.description}")
-        print(f"Options: {result.options}")
-
-        chat_history.append((user_input, result))
-        print(f"chat history: {chat_history}")
-        
-        print("\nRAG Analysis:")
-        print(json.dumps(bot.session_data["rag_analysis"], indent=4))
-
-def print_session_summary(session_data):
-    summary = {
-        "User Preferences": session_data.get("cannabis_preferences", {}),
-        "Final Recommendation": session_data.get("rag_analysis", {}).get("recommendations", "No recommendation provided"),
-        "Key Insights": session_data.get("user_context", {}).get("final_summary", {}).get("key_insights", [])
-    }
-    print(json.dumps(summary, indent=2))
+    def print_session_summary(self):
+        summary = {
+            "User Preferences": self.session_data.get("cannabis_preferences", {}),
+            "Final Recommendation": self.session_data.get("rag_analysis", {}).get("recommendations", "No recommendation provided"),
+            "Key Insights": self.session_data.get("user_context", {}).get("final_summary", {}).get("key_insights", [])
+        }
+        print(json.dumps(summary, indent=2))
 
 if __name__ == "__main__":
-    main()
+    bot = CannabisRecommendationBot()
+    bot.run()

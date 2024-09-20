@@ -2,13 +2,38 @@ import os
 import json
 import uuid
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 from dotenv import load_dotenv
-from  tree_of_thoughts_executor import TreeOfThoughtsExecutor, ToTExecutorInputs
+from dataclasses import dataclass
+from tree_of_thoughts_executor import TreeOfThoughtsExecutor, ToTExecutorInputs
 import logging
 
-logging.basicConfig(filename='cannabis_bot.log', level=logging.INFO, 
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+# Define the log directory and file path
+log_directory = r'logs'
+log_file = os.path.join(log_directory, 'cannabis_bot.log')
+
+# Create the log directory if it does not exist
+os.makedirs(log_directory, exist_ok=True)
+
+# Configure logging
+logging.basicConfig(
+    filename=log_file,
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+@dataclass
+class TreeOfThoughtsOutputs:
+    description: str
+    options: List[Dict[str, str]]
+    final_recommendation: Optional[str] = None
+
+class State:
+    START = "start"
+    COLLECTING_INFORMATION = "collecting_information"
+    GENERATING_RECOMMENDATION = "generating_recommendation"
+    FINALIZING_RECOMMENDATION = "finalizing_recommendation"
+    FINISHED = "finished"
 
 class CannabisRecommendationBot:
     def __init__(self):
@@ -28,6 +53,7 @@ class CannabisRecommendationBot:
             )
         )
         self.session_data = self.initialize_session_data()
+        self.state = State.START
         self.asked_questions = set()
 
     def initialize_session_data(self) -> Dict[str, Any]:
@@ -58,7 +84,11 @@ class CannabisRecommendationBot:
             "response": {{
                 "text": "The next response or question to the user",
                 "type": "question" or "recommendation" or "information",
-                "options": ["List", "of", "relevant", "options"]
+                "options": ["List", "of", "relevant", "options"],
+                "entities": ["List", "of", "key", "entities"],
+                "intent": "Identified intent"
+                "options": ["List", "of", "relevant", "options"],
+
             }},
             "recommendation": {{
                 "product_type": "Recommended product type",
@@ -67,7 +97,9 @@ class CannabisRecommendationBot:
                 "specific_products": ["List", "of", "specific", "product", "recommendations"]
             }},
             "explanation": "Detailed explanation of the response or recommendation",
-            "follow_up_questions": ["List", "of", "potential", "follow-up", "questions"]
+            "follow_up_questions": ["List", "of", "potential", "follow-up", "questions"],
+            "contextual_analysis": "In-depth contextual analysis based on the conversation",
+            "relationships": "Identified relationships between entities in the context"
         }}
 
         If a recommendation is not ready, set the "recommendation" field to null.
@@ -95,15 +127,32 @@ class CannabisRecommendationBot:
 
     def get_thought_generation_prompt(self) -> str:
         return """
-        Given the current conversation state and user input, generate potential follow-up questions, responses, or recommendations in the cannabis recommendation process.
-        Consider the following aspects based on the algorithm framework:
-        1. How quickly the user needs the effects to start
-        2. Whether the user wants to feel high
-        3. When the user plans to use the product (Day or Night)
-        4. The strength of effect the user is looking for
+        Given the current state of the problem:
+
+        {current_state}
+
+        Generate {num_thoughts} possible next thoughts or considerations. Each thought should provide a new perspective or additional information that could be relevant to addressing the problem.
+
+        Your response should be in the following format:
+        1. [First thought]
+        2. [Second thought]
+        ...
+        {num_thoughts}. [Last thought]
+        
+        generate potential follow-up questions, responses, or recommendations in the cannabis recommendation process. 
+        Use the following sample data structure to guide your questions:
+
+        Consider the following aspects based on the sample data columns:
+        1. Product Category: Ask about preferred consumption methods (e.g., Tincture, Vaporizer, Edible, Capsule, Flower)
+        2. CBD and THC content: Inquire about desired cannabinoid ratios or potency
+        3. Onset: Ask about how quickly the user needs the effects to start (e.g., Immediate, Fast, Medium, Slow)
+        4. Duration: Inquire about how long they want the effects to last (e.g., Short, Medium, Long)
+        5. Effects: Ask about desired effects (e.g., Non-euphoric, Euphoric, Balanced, Sedating, Energizing, Relaxing)
+        6. TimeOfUse: When they plan to use the product (e.g., Any, Day, Night)
 
         Generate thoughts about what information is still needed, what cannabis product recommendations might be appropriate, or what information should be provided to the user based on the conversation so far.
         Ensure that follow-up questions and options are diverse, not repetitive, and tailored to the specific context of the conversation.
+        For each question, provide a list of relevant options for the user to choose from, based on the unique values in the sample data.
         """
 
     def get_evaluation_prompt(self) -> str:
@@ -127,33 +176,34 @@ class CannabisRecommendationBot:
         Sativa Flower,Flower,20,180,Immediate,Medium,Energizing,Day
         Indica Flower,Flower,30,220,Immediate,Medium,Relaxing,Night"""
 
-    def process_user_input(self, user_input: str) -> str:
+    def process_user_input(self, user_input: str, chat_history: List[Tuple[str, str]]) -> Dict[str, Any]:
         if not self.session_data["user_context"]["initial_query"]:
             self.session_data["user_context"]["initial_query"] = {
                 "text": user_input,
                 "intent": ""
             }
         
-        self.session_data["user_context"]["interactions"].append({
-            "user_input": user_input,
-            "timestamp": datetime.now().isoformat()
-        })
+        self.session_data["user_context"]["interactions"].append({"user_input": user_input})
         
-        tot_input = f"User Query: {user_input}\nConversation History: {json.dumps(self.session_data)}\nAsked Questions: {json.dumps(list(self.asked_questions))}"
+        tot_output = self.executor.execute(user_input, chat_history)
         
-        try:
-            tot_output = self.executor.execute(user_query=tot_input, chat_history=[])
-        except Exception as e:
-            logging.error(f"Error occurred while executing Tree of Thoughts: {str(e)}")
-            return "I'm sorry, but I'm having trouble processing your request right now. Could you please try again?"
-
-        if not tot_output or not isinstance(tot_output, dict) or 'response' not in tot_output:
-            logging.error(f"Invalid response received from Tree of Thoughts executor: {tot_output}")
-            return "I apologize, but I received an invalid response. Could you please rephrase your question?"
-
         self.update_session_data(tot_output)
         
-        return self.format_response(tot_output)
+        response = tot_output["response"]["text"]
+        
+        if self.state == State.START:
+            self.state = State.COLLECTING_INFORMATION
+        elif self.state == State.COLLECTING_INFORMATION:
+            if tot_output["recommendation"]:
+                self.state = State.GENERATING_RECOMMENDATION
+            else:
+                self.state = State.COLLECTING_INFORMATION
+        elif self.state == State.GENERATING_RECOMMENDATION:
+            self.state = State.FINALIZING_RECOMMENDATION
+        elif self.state == State.FINALIZING_RECOMMENDATION:
+            self.state = State.FINISHED
+        
+        return {"response": tot_output["response"], "state": self.state, "session_data": self.session_data}
 
     def update_session_data(self, tot_output: Dict[str, Any]):
         response = tot_output["response"]
@@ -164,37 +214,22 @@ class CannabisRecommendationBot:
         
         if response["type"] == "recommendation":
             self.session_data["user_context"]["final_summary"] = {
-                "text": tot_output["explanation"],
-                "recommendation": tot_output["recommendation"]
+                "text": tot_output.get("explanation", ""),
+                "key_insights": response.get("entities", []),
+                "recommendation": tot_output.get("recommendation", {})
             }
         
-        self.session_data["rag_analysis"]["contextual_analysis"] = tot_output.get("contextual_analysis", {})
-        
+        self.session_data["rag_analysis"]["contextual_analysis"] = {
+            "text": tot_output.get("contextual_analysis", ""),
+            "entities": response.get("entities", []),
+            "relationships": tot_output.get("relationships", "")
+        }        
         if tot_output.get("recommendation"):
             self.session_data["rag_analysis"]["recommendations"] = tot_output["recommendation"]
         
-        for preference in tot_output.get("cannabis_preferences", []):
-            self.session_data["cannabis_preferences"][preference] = True
-
-    def format_response(self, tot_output: Dict[str, Any]) -> str:
-        response = tot_output["response"]
-        
-        if response["type"] == "question":
-            return self.format_question(response)
-        elif response["type"] == "recommendation":
-            return self.format_recommendation(tot_output)
-        else:
-            return response["text"]
-
-    def format_question(self, response: Dict[str, Any]) -> str:
-        question = response["text"]
-        options = response.get("options", [])
-        
-        if options:
-            options_str = "\n".join(f"{chr(97 + i)}. {opt}" for i, opt in enumerate(options))
-            return f"{question}\n\n{options_str}"
-        else:
-            return question
+        for entity in response.get("entities", []):
+            if entity not in self.session_data["cannabis_preferences"]:
+                self.session_data["cannabis_preferences"][entity] = True
 
     def format_recommendation(self, tot_output: Dict[str, Any]) -> str:
         recommendation = tot_output.get("recommendation")
@@ -224,7 +259,7 @@ def main():
     bot = CannabisRecommendationBot()
     print("Welcome to the Cannabis Recommendation Bot!")
     print("How can I assist you in finding the right cannabis product today?")
-
+    chat_history = []
     while True:
         user_input = input("You: ").strip()
         if user_input.lower() in ["exit", "quit", "bye"]:
@@ -234,11 +269,34 @@ def main():
             print("\nGoodbye!")
             break
         
-        response = bot.process_user_input(user_input)
-        print(f"\nBot: {response}")
+        response = bot.process_user_input(user_input, chat_history)
+        if not response:
+            print("I'm sorry, but I'm having trouble processing your request right now. Could you please try again?")
+            continue
+
+        tot_output = response["response"]
+        recommendation_result = ""
+        if tot_output["type"] == "recommendation":
+            recommendation_result = bot.format_recommendation(tot_output)
+
+        description = tot_output.get("text", "")
+        options = tot_output.get("options", [])
+        formatted_options = [{chr(97 + i): opt} for i, opt in enumerate(options)]
+
+        result = TreeOfThoughtsOutputs(description, formatted_options, recommendation_result)
+        print(f"Bot: {result.description}")
+        if result.options:
+            print("Options:")
+            for option in result.options:
+                for key, value in option.items():
+                    print(f"  {key}) {value}")
+        if result.final_recommendation:
+            print(f"\nRecommendation:\n{result.final_recommendation}")
+
+        chat_history.append((user_input, result.description))
         
-        # print("\nRAG Analysis:")
-        # print(json.dumps(bot.session_data["rag_analysis"], indent=4))
+        print("\nRAG Analysis:")
+        print(json.dumps(bot.session_data["rag_analysis"], indent=4))
 
 def print_session_summary(session_data):
     summary = {
