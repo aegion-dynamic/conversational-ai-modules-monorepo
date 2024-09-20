@@ -60,7 +60,7 @@ class ChainOfThoughtsModule:
             "new_state": "CASUAL_CONVERSATION or MEDICAL_INQUIRY",
             "follow_up_questions": [
                 {{
-                    "question": "A follow-up question and options if needed should be generated from the knowledge base understand the knowledge base and generate the next follow up questions and dont repeat the question if it is previously been asked",
+                    "question": "A follow-up question generated from the knowledge base",
                     "options": ["Option 1", "Option 2", "Option 3"]
                 }}
             ]
@@ -75,9 +75,12 @@ class ChainOfThoughtsModule:
         Analyze the following user input in the context of a medical cannabis inquiry:
         User input: "{user_input}"
         Context: {json.dumps(self.context)}
+        Knowledge base: {json.dumps(self.knowledge_base)}
         
         Determine if we have enough information to understand the problem. If so, transition to the UNDERSTANDING_PROBLEM state.
         Otherwise, gather more information about the medical condition.
+
+        Generate follow-up questions based on the knowledge base. The questions should help understand the user's condition, preferences, and needs related to medical cannabis use.
 
         Provide a response in the following JSON format:
         {{
@@ -88,7 +91,7 @@ class ChainOfThoughtsModule:
             "new_state": "MEDICAL_INQUIRY or UNDERSTANDING_PROBLEM",
             "follow_up_questions": [
                 {{
-                    "question": "A follow-up question and options if needed should be generated from the knowledge base understand the knowledge base and generate the next follow up questions and dont repeat the question if it is previously been asked",
+                    "question": "A follow-up question generated from the knowledge base",
                     "options": ["Option 1", "Option 2", "Option 3"]
                 }}
             ]
@@ -104,9 +107,12 @@ class ChainOfThoughtsModule:
         Analyze the following user input and context to ensure we fully understand the medical problem:
         User input: "{user_input}"
         Context: {json.dumps(self.context)}
+        Knowledge base: {json.dumps(self.knowledge_base)}
         
         Determine if we have sufficient information to provide a solution. If so, transition to the SOLUTION_PROVISION state.
         Otherwise, gather any remaining necessary information.
+
+        Generate follow-up questions based on the knowledge base if more information is needed.
 
         Provide a response in the following JSON format:
         {{
@@ -114,7 +120,7 @@ class ChainOfThoughtsModule:
             "new_state": "UNDERSTANDING_PROBLEM or SOLUTION_PROVISION",
             "follow_up_questions": [
                 {{
-                    "question": "A follow-up question and options if needed should be generated from the knowledge base understand the knowledge base and generate the next follow up questions and dont repeat the question if it is previously been asked",
+                    "question": "A follow-up question generated from the knowledge base",
                     "options": ["Option 1", "Option 2", "Option 3"]
                 }}
             ]
