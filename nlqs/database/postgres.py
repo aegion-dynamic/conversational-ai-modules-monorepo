@@ -4,7 +4,7 @@ import psycopg2
 import pandas as pd
 from psycopg2 import sql
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 from nlqs.database.abstract_driver import AbstractDriver
 
 # Create a logger object
@@ -65,19 +65,19 @@ class PostgresDriver(AbstractDriver):
             self._db_connection.close()
             logger.info("Disconnected from PostgreSQL database.")
 
-    def execute_query(self, query: str) -> List[str] | List[Tuple[str]]:
+    def execute_query(self, query: str) -> Optional[List[Tuple[Any]]]:
         """Executes the SQL query and returns the result.
 
         Args:
             query (str): the SQL query.
 
         Returns:
-            List[str]: the result of the query, or an empty list if no results.
+            Optional[List[Tuple]]: the result of the query as a list of tuples, or None if no results.
         """
         print(f"Executing query: {query}")
 
         if not query.strip():
-            return []
+            return None
 
         if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
@@ -91,11 +91,11 @@ class PostgresDriver(AbstractDriver):
                 result = self.cursor.fetchall()
                 self._db_connection.commit()
                 logger.info(f"Query executed successfully: {result}")
-                return result if result else []  # Return the full result here
+                return result  # Return the full result here
             else:
                 self._db_connection.commit()
                 logger.info(f"Query executed successfully.")
-                return []  # Return an empty list for non-SELECT queries=
+                return None  # Return None for non-SELECT queries
         except psycopg2.Error as e:
             error_message = f"Error executing SQL query: {e}"
             print(error_message)
@@ -155,7 +155,7 @@ class PostgresDriver(AbstractDriver):
             columns_info = self.cursor.fetchall()
             columns_in_database = [column[0] for column in columns_info]  # Extract column names
             return columns_in_database
-        except psycopg2.Error as e:
+        except Exception as e:  # Catch the Exception here
             logger.error(f"Error retrieving columns: {e}")
             return []
 
@@ -241,8 +241,9 @@ class PostgresDriver(AbstractDriver):
             str: The name of the primary key column.
 
         Raises:
-            ValueError: If the database connection is not established or
-                        if the table has no primary key.
+            ValueError: If the database connection is not established,
+                        if the table has no primary key, or
+                        if the table has multiple primary keys.
             psycopg2.Error: If there is an error executing the SQL command.
         """
         if self.cursor is None or self._db_connection is None:
@@ -257,12 +258,14 @@ class PostgresDriver(AbstractDriver):
                 WHERE tc.table_name = %s AND tc.constraint_type = 'PRIMARY KEY';
             """
             self.cursor.execute(query, (table_name,))
-            result = self.cursor.fetchone()
+            results = self.cursor.fetchall()  # Fetch all results
 
-            if result is None:
+            if not results:
                 raise ValueError(f"No primary key found for table '{table_name}'.")
+            if len(results) > 1:
+                raise ValueError(f"Multiple primary keys found for table '{table_name}'.")
 
-            return result[0]
+            return results[0][0]  # Return the first primary key
 
         except psycopg2.Error as e:
             raise psycopg2.Error(f"Error getting primary key from table '{table_name}': {e}")

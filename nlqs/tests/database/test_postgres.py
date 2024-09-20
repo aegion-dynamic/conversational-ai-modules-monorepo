@@ -1,39 +1,8 @@
 import pytest
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 import pandas as pd
 import psycopg2
-from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
-
-
-@pytest.fixture
-def pg_config():
-    return PostgresConnectionConfig(
-        host="localhost",
-        port=5432,
-        user="postgres",
-        password="password",
-        database_name="test_db",
-        dataset_table_name="test_table",
-    )
-
-
-@pytest.fixture
-def driver(pg_config):
-    return PostgresDriver(pg_config)
-
-
-@pytest.fixture
-def mock_connection():
-    mock_connection = Mock(spec=psycopg2.extensions.connection)
-    mock_cursor = Mock(spec=psycopg2.extensions.cursor)
-    mock_connection.cursor.return_value = mock_cursor
-    return mock_connection
-
-
-@pytest.fixture(autouse=True)
-def patch_psycopg2_connect(mock_connection):
-    with patch("psycopg2.connect", return_value=mock_connection) as mock:
-        yield mock
+from psycopg2 import sql
 
 
 def test_connect_successful(driver, mock_connection):
@@ -60,9 +29,10 @@ def test_disconnect_successful(driver, mock_connection):
 def test_execute_query_successful(driver, mock_connection):
     """Test successful execution of a SQL query."""
     driver.connect()
-    mock_connection.cursor.return_value.fetchall.return_value = [("Jane",), ("John",)]
+    expected_result = [("Jane",), ("John",)]
+    mock_connection.cursor.return_value.fetchall.return_value = expected_result
     result = driver.execute_query("SELECT name FROM test_table WHERE value > 15")
-    assert result == ["Jane", "John"]
+    assert result == expected_result
 
 
 def test_execute_query_with_error(driver, mock_connection):
@@ -112,16 +82,24 @@ def test_retrieve_descriptions_and_types_from_db_with_error(driver, mock_connect
     assert categorical_columns == []
 
 
-def test_get_database_columns(driver, mock_connection):
+def test_get_database_columns_successful(driver, mock_connection):
     """Test retrieval of database columns in order."""
     driver.connect()
-    mock_connection.cursor.return_value.fetchall.return_value = [
-        (0, "id", "INTEGER", 1, None, 1),
-        (1, "name", "TEXT", 1, None, 0),
-        (2, "value", "REAL", 1, None, 0),
-    ]
+    expected_columns = [("id",), ("name",), ("value",)]
+    mock_connection.cursor.return_value.fetchall.return_value = expected_columns
     columns = driver.get_database_columns("test_table")
+    driver.cursor.execute.assert_called_once_with(
+        sql.SQL("SELECT column_name FROM information_schema.columns WHERE table_name = %s"), ["test_table"]
+    )
     assert columns == ["id", "name", "value"]
+
+
+def test_get_database_columns_with_error(driver, mock_connection):
+    """Test handling of errors during column retrieval."""
+    driver.connect()
+    mock_connection.cursor.return_value.fetchall.side_effect = Exception("Test error")
+    columns = driver.get_database_columns("test_table")
+    assert columns == []
 
 
 def test_validate_query_valid_query(driver, mock_connection):
@@ -170,15 +148,28 @@ def test_fetch_data_from_database_with_error(driver, mock_connection):
 def test_get_primary_key(driver, mock_connection):
     """Test getting the primary key of a table."""
     driver.connect()
-    mock_connection.cursor.return_value.fetchall.return_value = [(0, "id", "INTEGER", 1, None, 1)]
+    expected_result = [("id",)]  # List of tuples
+    mock_connection.cursor.return_value.fetchall.return_value = expected_result
     primary_key = driver.get_primary_key("test_table")
-    assert primary_key == "id"
+    assert primary_key == expected_result[0][0]  # Assert on the column name
 
 
 def test_get_primary_key_no_primary_key(driver, mock_connection):
     """Test getting the primary key when the table has no primary key."""
     driver.connect()
-    mock_connection.cursor.return_value.fetchall.return_value = [(0, "id", "INTEGER", 1, None, 0)]
+    mock_connection.cursor.return_value.fetchall.return_value = []  # No primary key
     with pytest.raises(ValueError) as context:
         driver.get_primary_key("test_table")
     assert "No primary key found" in str(context.value)
+
+
+def test_get_primary_key_multiple_primary_keys(driver, mock_connection):
+    """Test getting the primary key when the table has multiple primary keys."""
+    driver.connect()
+    mock_connection.cursor.return_value.fetchall.return_value = [
+        ("id1",),
+        ("id2",),
+    ]  # Mock multiple primary keys
+    with pytest.raises(ValueError) as context:
+        driver.get_primary_key("test_table_multiple_pk")
+    assert "Multiple primary keys found" in str(context.value)
