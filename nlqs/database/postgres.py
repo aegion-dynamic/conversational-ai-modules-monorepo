@@ -65,7 +65,7 @@ class PostgresDriver(AbstractDriver):
             self._db_connection.close()
             logger.info("Disconnected from PostgreSQL database.")
 
-    def execute_query(self, query: str) -> List[str]:
+    def execute_query(self, query: str) -> List[str] | List[Tuple[str]]:
         """Executes the SQL query and returns the result.
 
         Args:

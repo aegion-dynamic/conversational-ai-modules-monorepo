@@ -202,8 +202,11 @@ class NLQS:
                 quantitaive_query = generate_quantitaive_serach_query(quantitaive_data, self.table_name, primary_key)
                 quantitative_ids_uncleaned = driver.execute_query(quantitaive_query)
 
-                quantitative_ids = [item[0] for item in quantitative_ids_uncleaned]
-                print(f"quantitative_ids: {quantitative_ids}")
+                quantitative_ids = []
+
+                if quantitative_ids_uncleaned:
+                    quantitative_ids = [item[0] for item in quantitative_ids_uncleaned]
+                    print(f"quantitative_ids: {quantitative_ids}")
 
                 qualitative_ids = qualitative_search(chroma_collections, qualitative_data, primary_key)
                 print(f"qualitative_ids: {qualitative_ids}")
@@ -242,6 +245,10 @@ class NLQS:
                 # Initialize lists to hold records and URIs
                 records = []
                 uris = []
+
+                if not data_retreived:
+                    result = NLQSResult(records=[], uris=[])
+                    return result
 
                 # Process the retrieved data
                 for row in data_retreived:
