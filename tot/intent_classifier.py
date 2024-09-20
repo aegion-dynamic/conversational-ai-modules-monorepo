@@ -1,7 +1,13 @@
-import openai
 from typing import Optional
-from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
-from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
+
+import openai
+from openai.types.chat.chat_completion_system_message_param import (
+    ChatCompletionSystemMessageParam,
+)
+from openai.types.chat.chat_completion_user_message_param import (
+    ChatCompletionUserMessageParam,
+)
+
 
 class IntentClassifier:
     def __init__(self, api_key: str, classification_prompt: Optional[str] = None):
@@ -45,16 +51,14 @@ class IntentClassifier:
         """
         prompt = self.classification_prompt.format(user_input=user_input)
         messages = [
-            ChatCompletionSystemMessageParam(role="system", content="You are a helpful assistant classifying user intent."),
-            ChatCompletionUserMessageParam(role="user", content=prompt)
+            ChatCompletionSystemMessageParam(
+                role="system", content="You are a helpful assistant classifying user intent."
+            ),
+            ChatCompletionUserMessageParam(role="user", content=prompt),
         ]
 
         response = openai.chat.completions.create(
-            model="gpt-4",
-            messages=messages,
-            max_tokens=100,
-            n=1,
-            temperature=0.3
+            model="gpt-4o", messages=messages, max_tokens=100, n=1, temperature=0.3
         )
 
         choice = response.choices[0]

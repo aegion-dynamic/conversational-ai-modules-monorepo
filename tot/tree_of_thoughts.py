@@ -1,14 +1,20 @@
-import re
-import openai
 import json
 import logging
-from typing import List, Dict, Any, Optional, Tuple
-from  sample_data_manager import SampleDataManager
-from  intent_classifier import IntentClassifier
-from  thought_generator import ThoughtGenerator
-from  state_evaluator import StateEvaluator
-from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
-from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
+import re
+from typing import Any, Dict, List, Optional, Tuple
+
+import openai
+from openai.types.chat.chat_completion_system_message_param import (
+    ChatCompletionSystemMessageParam,
+)
+from openai.types.chat.chat_completion_user_message_param import (
+    ChatCompletionUserMessageParam,
+)
+
+from tot.intent_classifier import IntentClassifier
+from tot.sample_data_manager import SampleDataManager
+from tot.state_evaluator import StateEvaluator
+from tot.thought_generator import ThoughtGenerator
 
 
 class TreeOfThoughts:
@@ -28,7 +34,7 @@ class TreeOfThoughts:
         state_evaluation_prompt: str,
         json_output_prompt: str,
     ):
-        """ Initialize the TreeOfThoughts class with the required parameters.
+        """Initialize the TreeOfThoughts class with the required parameters.
 
         Args:
             api_key (str): The OpenAI API key.
@@ -70,7 +76,7 @@ class TreeOfThoughts:
             best_states_count (int, optional): Number of best states to retain at each step. Defaults to 2.
 
         Returns:
-            Dict[str, Any]: A dictionary containing the summary, quantitative data, qualitative data, 
+            Dict[str, Any]: A dictionary containing the summary, quantitative data, qualitative data,
                             user requested columns, and intent.
 
         Raises:
@@ -134,9 +140,7 @@ class TreeOfThoughts:
         ]
 
         self.logger.info("Sending request to OpenAI API")
-        response = openai.chat.completions.create(
-            model="gpt-4", messages=messages, n=1, temperature=0.2
-        )
+        response = openai.chat.completions.create(model="gpt-4o", messages=messages, n=1, temperature=0.2)
         self.logger.info("Received response from OpenAI API")
 
         content = response.choices[0].message.content
