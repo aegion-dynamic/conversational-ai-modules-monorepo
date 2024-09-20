@@ -59,7 +59,6 @@ def query_template(
         Other Notes: Avoid self-referencing or mentioning "I," "we," or "AI" in the output. Directly provide the information without referencing the speaker. If you receive any links in the input, please highlight them in the output.""",
         ),
         ("user", "{context} and retrived data: {retrieved_data}"),
-        ("user", "{context} and retrived data: {retrieved_data}"),
     ]
 
     # TODO: Loop through previous messages and add them to the template based on AI or Human
