@@ -90,7 +90,9 @@ class NLQS:
         driver = self.connection_driver
 
         # Step 1
-        column_descriptions, numerical_columns, categorical_columns = driver.retrieve_descriptions_and_types_from_db()
+        column_descriptions, numerical_columns, categorical_columns, descriptive_columns = (
+            driver.retrieve_descriptions_and_types_from_db()
+        )
 
         if column_descriptions == {}:
             # Step 2
@@ -98,13 +100,15 @@ class NLQS:
                 df=self.connection_driver.fetch_data_from_database(table_name=self.table_name),
                 db_driver=self.connection_driver,
             )
-            (
-                column_descriptions,
-                numerical_columns,
-                categorical_columns,
-            ) = driver.retrieve_descriptions_and_types_from_db()
+            (column_descriptions, numerical_columns, categorical_columns, descriptive_columns) = (
+                driver.retrieve_descriptions_and_types_from_db()
+            )
 
-        return column_descriptions, numerical_columns, categorical_columns
+        print(f"column_descriptions: {column_descriptions}")
+        print(f"numerical_columns: {numerical_columns}")
+        print(f"categorical_columns: {categorical_columns}")
+        print(f"descriptive_columns: {descriptive_columns}")
+        return column_descriptions, numerical_columns, categorical_columns, descriptive_columns
 
     # Step 4
     def execute_nlqs_workflow(self, user_input: str, chat_history: List[Tuple[str, str]]) -> NLQSResult:
@@ -140,7 +144,9 @@ class NLQS:
         # Database Connection
         driver = self.connection_driver
 
-        column_descriptions, numerical_columns, categorical_columns = self._create_introspection_table()
+        column_descriptions, numerical_columns, categorical_columns, descriptive_columns = (
+            self._create_introspection_table()
+        )
 
         primary_key = driver.get_primary_key(self.table_name)
 
@@ -166,6 +172,7 @@ class NLQS:
             column_descriptions_dictionary=column_descriptions,
             numerical_columns=numerical_columns,
             categorical_columns=categorical_columns,
+            descriptive_columns=descriptive_columns,
             llm=self.llm,
         )
 
@@ -178,6 +185,7 @@ class NLQS:
                 column_descriptions_dictionary=column_descriptions,
                 numerical_columns=numerical_columns,
                 categorical_columns=categorical_columns,
+                descriptive_columns=descriptive_columns,
                 llm=self.llm,
             )
             count += 1
@@ -197,10 +205,12 @@ class NLQS:
         else:
             print("checking for user requested columns...")
             if summarized_input.user_requested_columns:
-                quantitaive_data = summarized_input.quantitative_data
-                qualitative_data = summarized_input.qualitative_data
+                numerical_data = summarized_input.numerical_data
+                categorical_data = summarized_input.categorical_data
+                # TODO: use descriptive data...
+                descriptive_data = summarized_input.descriptive_data
 
-                quantitaive_query = generate_quantitaive_serach_query(quantitaive_data, self.table_name, primary_key)
+                quantitaive_query = generate_quantitaive_serach_query(numerical_data, self.table_name, primary_key)
                 quantitative_ids_uncleaned = driver.execute_query(quantitaive_query)
 
                 quantitative_ids = []
@@ -209,7 +219,7 @@ class NLQS:
                     quantitative_ids = [item[0] for item in quantitative_ids_uncleaned]
                     print(f"quantitative_ids: {quantitative_ids}")
 
-                qualitative_ids = qualitative_search(chroma_collections, qualitative_data, primary_key)
+                qualitative_ids = qualitative_search(chroma_collections, categorical_data, primary_key)
                 print(f"qualitative_ids: {qualitative_ids}")
 
                 # Find the intersection of quantitative_ids and qualitative_ids
