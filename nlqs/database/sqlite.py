@@ -3,7 +3,7 @@ import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import pandas as pd
 from sqlalchemy import Result, create_engine, text
@@ -51,13 +51,38 @@ class SQLiteDriver(AbstractDriver):
         # There's no need to explicitly close the engine
         logger.info("Disconnected from SQLite database.")
 
-    def execute_query(self, query: str) -> Optional[Sequence[Row[Any]] | Result[Any]]:
+    def execute_query(
+        self, query: str, params: Optional[Union[Tuple, List]] = None
+    ) -> Optional[Sequence[Row[Any]] | Result[Any]]:
+        """Executes a SQL query on the SQLite database.
+
+        Args:
+            query (str): The SQL query to execute.
+            params (Optional[Union[Tuple, List]], optional): A tuple or list of parameters to be used with the query. Defaults to None.
+
+        Raises:
+            ValueError: If the database connection is not established.
+            e: If there is an error executing the SQL query.
+
+        Returns:
+            Optional[Sequence[Row[Any]] | Result[Any]]: The result of the query, or None if the result is empty.
+        """
         if self.Session is None or self.engine is None:
             raise ValueError("Database connection not established.")
 
+        print(f"Executing query: {query}")
+
+        if not query.strip():
+            return None
+
         with self.Session() as session:
             try:
-                result = session.execute(text(query))
+                # Execute with or without parameters
+                if params:
+                    result = session.execute(text(query), params)
+                else:
+                    result = session.execute(text(query))
+
                 # Only fetch results if the query is a SELECT statement
                 if query.lower().startswith("select"):
                     result = result.fetchall()

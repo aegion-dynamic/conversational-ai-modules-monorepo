@@ -2,11 +2,12 @@ import json
 import logging
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Union
-
 import chromadb
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI, OpenAI
+from nlqs.database.postgres import PostgresDriver
+from nlqs.database.sqlite import SQLiteDriver
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -55,8 +56,8 @@ def summarize(
     chat_history: List[Tuple[str, str]],
     column_descriptions_dictionary: Dict[str, str],
     numerical_columns: List[str],
-    categorical_columns: List[str],
     descriptive_columns: List[str],
+    categorical_columns: List[str],
     llm: Union[ChatOpenAI, OpenAI],
 ) -> SummarizedInput:
     """Summarizes the user input and returns the summary, quantitative data, and qualitative data, along with the user requested columns in a JSON format.
@@ -66,6 +67,7 @@ def summarize(
         chat_history (list[(str, str)]): The chat history.
         column_descriptions (dict[str, str]): The column descriptions.
         numerical_columns (list[str]): The numerical columns.
+        descriptive_columns (list[str]): The descriptive columns.
         categorical_columns (list[str]): The categorical columns.
         llm (Union[ChatOpenAI, OpenAI]): The LLM object.(Contains the details of the language we are using.)
 
@@ -77,12 +79,12 @@ def summarize(
                 "column name : str" : "Data mentioned about that column by the user : str",
                 "column name : str" : "Data mentioned about that column by the user : str",
             },
-            "categorical_data": {
+            "descriptive_data": {
                 "column name : str" : "Data mentioned about that column by the user : str",
                 "column name : str" : "Data mentioned about that column by the user : str",
                 "column name : str" : "Data mentioned about that column by the user : str",
             },
-            "descriptive_data": {
+            "categorical_data": {
                 "column name : str" : "Data mentioned about that column by the user : str",
                 "column name : str" : "Data mentioned about that column by the user : str",
                 "column name : str" : "Data mentioned about that column by the user : str",
@@ -147,8 +149,8 @@ def summarize(
                 The data we have and chat history:
                 Data:{column_descriptions}\n\n 
                 numerical columns in the data: {numerical_columns}\n\n 
-                categorical columns in the data: {categorical_columns}\n\n
                 descriptive columns in the data: {descriptive_columns}\n\n 
+                categorical columns in the data: {categorical_columns}\n\n
                 chat history: {chat_history}
 
                 Now, summarize the user input, chat history and provide the structured output in JSON format.
@@ -191,7 +193,7 @@ def summarize(
     return summarized_input
 
 
-def generate_quantitaive_serach_query(quantitaive_data: Dict[str, str], table_name: str, primary_key: str) -> str:
+def generate_numerical_serach_query(quantitaive_data: Dict[str, str], table_name: str, primary_key: str) -> str:
     """Creates an SQL query from a dictionary of quantitative data.
 
     Args:
@@ -233,7 +235,7 @@ def generate_quantitaive_serach_query(quantitaive_data: Dict[str, str], table_na
     return query
 
 
-def qualitative_search(collection: chromadb.Collection, data: Dict[str, str], primary_key: str) -> List[int]:
+def descriptive_search(collection: chromadb.Collection, data: Dict[str, str], primary_key: str) -> List[int]:
     """Performs a similarity search on the database and returns up to 5 similar results per column.
 
     Args:
@@ -260,39 +262,85 @@ def qualitative_search(collection: chromadb.Collection, data: Dict[str, str], pr
                         ids_for_column.add(int(id_value))
             ids_per_column[column] = list(ids_for_column)
 
-    print(f"ids_per_column: {ids_per_column}")
+    # print(f"ids_per_column: {ids_per_column}")
 
     # Flatten the list of lists into a single list of unique IDs
     all_ids = list(set([id_val for sublist in ids_per_column.values() for id_val in sublist]))
     return all_ids
 
 
-# def qualitaive_search(collection: chromadb.Collection, data: Dict[str, str], primary_key: str) -> List[str]:
-#     """Performs a similarity search on the database and returns all similar results.
+def categorical_search(
+    collection: chromadb.Collection,
+    data: Dict[str, str],
+    db_driver: Union[SQLiteDriver, PostgresDriver],
+    primary_key: str,
+) -> List[int]:
+    """Performs a similarity search on the database and returns up to 5 similar results per column.
 
-#     Args:
-#         collection (chromadb.Collection): The ChromaDB collection to search.
-#         data (Dict[str, str]): A dictionary of qualitative data to search for.
-#         primary_key (str): The primary key column name in the database.
+    Args:
+        collection (chromadb.Collection): The ChromaDB collection to search.
+        data (Dict[str, str]): A dictionary of qualitative data to search for.
+        db_driver (Union[SQLiteDriver, PostgresDriver]): database driver.
+        primary_key (str): The primary key column name in the database.
 
-#     Returns:
-#         List[str]: A dictionary containing the search results.
-#     """
-#     all_ids = []
+    Returns:
+        List[int]: A list of unique IDs from the search results.
+    """
+    ids_per_column = {}
 
-#     for column, condition in data.items():
-#         query_result = collection.query(query_texts=condition, n_results=10, where={"column_name": column})
+    for column, condition in data.items():
+        query_result = collection.query(query_texts=[condition], n_results=1, where={"column_name": column})
 
-#         if query_result:
-#             ids_for_column = set()  # Use a set to store unique IDs for this column
-#             for result in query_result["metadatas"]:
-#                 for item in result:
-#                     id_value = item.get(primary_key)
-#                     if id_value is not None:
-#                         ids_for_column.add(str(id_value))  # Convert to string for comparison
-#             all_ids.append(ids_for_column)
+        # print(f"Query result: {query_result["documents"]}")
 
-#     # Find the intersection of IDs across all columns
-#     common_ids = set.intersection(*all_ids) if all_ids else set()
+        if query_result["documents"]:
+            ids_for_column = set()
 
-#     return list(common_ids)
+            # Extract the string directly
+            query_value = query_result["documents"][0][0]  # Get the first element of the list
+
+            # Use parameter binding
+            query = (
+                f"SELECT {primary_key} FROM {db_driver.db_config.dataset_table_name} WHERE {column} = '{query_value}'"
+            )
+            ids_for_column_uncleaned = db_driver.execute_query(query)
+
+            if ids_for_column_uncleaned:
+                ids_for_column = {item[0] for item in ids_for_column_uncleaned}
+
+            ids_per_column[column] = list(ids_for_column)
+
+    # print(f"ids_per_column: {ids_per_column}")
+
+    # Flatten the list of lists into a single list of unique IDs
+    all_ids = list(set([id_val for sublist in ids_per_column.values() for id_val in sublist]))
+    return all_ids
+
+
+def get_chroma_collection(collection_name: str, client) -> Tuple[chromadb.Collection, chromadb.Collection]:
+    """Retrieves data from the chroma collection, if there is no chroma collection it creates one.
+
+    Args:
+        collection_name (str): name of chroma collection for descriptive data.
+        client (_type_): chroma client
+
+    Returns:
+        Tuple[chromadb.Collection, chromadb.Collection]: A tuple containing the chroma collection for descriptive data and the chroma collection for categorical data.
+    """
+
+    collections = [col.name for col in client.list_collections()]
+
+    print(f"collections: {collections}")
+    categorical_collection_name = "categorical_data"  # Default name for categorical collection
+
+    # Descriptive Data Collection
+    if collection_name in collections and categorical_collection_name in collections:
+        print(f"Collection '{collection_name}' already exists, getting existing collection...")
+        descriptive_collection = client.get_collection(collection_name)
+        categorical_collection = client.get_collection(categorical_collection_name)
+    else:
+        print(f"Collection '{collection_name}' does not exists, Create a collection...")
+
+        raise ValueError("Chroma collection doesn't exist. Create a chroma collection!!")
+
+    return descriptive_collection, categorical_collection

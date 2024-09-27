@@ -67,11 +67,12 @@ class PostgresDriver(AbstractDriver):
             self._db_connection.close()
             logger.info("Disconnected from PostgreSQL database.")
 
-    def execute_query(self, query: str) -> Optional[List[Tuple[Any]]]:
+    def execute_query(self, query: str, params: Optional[Union[Tuple, List]] = None) -> Optional[List[Tuple[Any]]]:
         """Executes the SQL query and returns the result.
 
         Args:
             query (str): the SQL query.
+            params (Optional[Union[Tuple, List]], optional): A tuple or list of parameters to be used with the query. Defaults to None.
 
         Returns:
             Optional[List[Tuple]]: the result of the query as a list of tuples, or None if no results.
@@ -86,7 +87,11 @@ class PostgresDriver(AbstractDriver):
         try:
             logger.info(f"Executing query: {query}")
 
-            self.cursor.execute(query)
+            # Execute the query with parameters if provided
+            if params:
+                self.cursor.execute(query, params)
+            else:
+                self.cursor.execute(query)
 
             # Only fetch results if the query is a SELECT statement
             if query.lower().startswith("select"):
@@ -104,36 +109,32 @@ class PostgresDriver(AbstractDriver):
             logger.error(error_message)
             raise e
 
-    def retrieve_descriptions_and_types_from_db(self) -> Tuple[Dict[str, str], List[str], List[str]]:
+    def retrieve_descriptions_and_types_from_db(self) -> Tuple[Dict[str, str], List[str], List[str], List[str]]:
         """Retrieves descriptions and types from the PostgreSQL database.
 
-        Args:
-            db_file (PostgreSQL database, optional): PostgreSQL database to store all the tables. Defaults to POSTGRES_DB_CONFIG.
-
         Returns:
-            Tuple[List[str], List[str], List[str]]: Return descriptions, numerical_columns, categorial_columns
+            Tuple[Dict[str, str], List[str], List[str], List[str]]:
+            A dictionary of column descriptions, and lists of numerical, categorical, and descriptive columns.
         """
         if self.cursor is None or self._db_connection is None:
             raise ValueError("Database connection not established.")
 
         try:
-            # Retrieve descriptions
-            self.cursor.execute("SELECT column_name, description FROM column_descriptions")
-            description_rows = self.cursor.fetchall()
-            descriptions = {row[0]: row[1] for row in description_rows}
+            # Fetch both descriptions and types in a single query from the column_metadata table
+            self.cursor.execute("SELECT column_name, description, column_type FROM column_metadata")
+            rows = self.cursor.fetchall()
 
-            # Retrieve column types
-            self.cursor.execute("SELECT column_name, column_type FROM column_types")
-            type_rows = self.cursor.fetchall()
-            numerical_columns = [row[0] for row in type_rows if row[1] == "numerical"]
-            categorical_columns = [row[0] for row in type_rows if row[1] == "categorical"]
+            # Initialize structures for storing results
+            descriptions = {row[0]: row[1] for row in rows}
+            numerical_columns = [row[0] for row in rows if row[2] == "numerical"]
+            categorical_columns = [row[0] for row in rows if row[2] == "categorical"]
+            descriptive_columns = [row[0] for row in rows if row[2] == "descriptive"]
 
-            return descriptions, numerical_columns, categorical_columns
-        except psycopg2.Error as e:
-            logger.error(f"Error retrieving descriptions and types: {e}")
-            # roll back the failed sql query
+            return descriptions, numerical_columns, categorical_columns, descriptive_columns
+        except Exception as e:
             self._db_connection.rollback()
-            return {}, [], []
+            logger.error(f"Error retrieving descriptions and types: {e}")
+            return {}, [], [], []
 
     def get_database_columns(self, table_name: str) -> List[str]:
         """Returns the columns in the specified table in the order they appear in the database.

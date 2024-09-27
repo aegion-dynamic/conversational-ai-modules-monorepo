@@ -15,7 +15,7 @@ from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
 from nlqs.description_generator import get_chroma_collection
 from nlqs.nlqs import ChromaDBConfig, NLQSResult
 from nlqs.parameters import OPENAI_API_KEY
-from nlqs.query import generate_quantitaive_serach_query, qualitative_search, summarize
+from nlqs.query import generate_numerical_serach_query, descriptive_search, summarize
 
 # ChromaDB configuration
 chroma_config = ChromaDBConfig(collection_name="aegion")
@@ -98,7 +98,7 @@ def chat_benchmark(user_input, chat_history):
         quantitaive_data = summarized_input.quantitative_data
         qualitative_data = summarized_input.qualitative_data
 
-        quantitaive_query = generate_quantitaive_serach_query(
+        quantitaive_query = generate_numerical_serach_query(
             quantitaive_data, driver.db_config.dataset_table_name, primary_key
         )
         quantitative_ids_uncleaned = driver.execute_query(quantitaive_query)
@@ -106,7 +106,7 @@ def chat_benchmark(user_input, chat_history):
         quantitative_ids = [item[0] for item in quantitative_ids_uncleaned]
         log_data[6] = quantitative_ids
 
-        qualitative_ids = qualitative_search(chroma_collection, qualitative_data, primary_key)
+        qualitative_ids = descriptive_search(chroma_collection, qualitative_data, primary_key)
         log_data[7] = qualitative_ids
 
         # Find the intersection of quantitative_ids and qualitative_ids

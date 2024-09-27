@@ -1,7 +1,6 @@
 import json
 import re
 from typing import Dict, List, Optional, Union
-
 import chromadb
 import pandas as pd
 from langchain.chains import LLMChain
@@ -9,10 +8,28 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic.v1 import SecretStr
-
+from pathlib import Path
+from discord_bot.parameters import VECTORDB_PORT
 from nlqs.database.postgres import PostgresDriver
 from nlqs.database.sqlite import SQLiteDriver
+from nlqs.nlqs import ChromaDBConfig
 from nlqs.parameters import OPENAI_API_KEY
+from nlqs.database.postgres import PostgresConnectionConfig
+from nlqs.database.sqlite import SQLiteConnectionConfig
+from scripts.parameters import (
+    CHROMA_COLLECTION_NAME,
+    OUTPUT_COLUMNS,
+    SQL_TABLE_NAME,
+    SQLITE_DB_FILE,
+    SQL_TABLE_NAME,
+    SUPABASE_DATABASE_NAME,
+    SUPABASE_HOST,
+    SUPABASE_PASSWORD,
+    SUPABASE_PORT,
+    SUPABASE_USER,
+    URL_COLUMN,
+    VECTORDB_HOST,
+)
 
 
 # 1. pass the data in the databse
@@ -20,7 +37,7 @@ from nlqs.parameters import OPENAI_API_KEY
 # 3. pass the column name, it's data type and the sample data into the llm to generate desccriptions
 # 4. in the instruction for llm, i passed some predifined descriptions to make the llm know how to write descriptions.
 # these predifined descriptions will not effect any future changes..
-def get_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, Dict[str, str]]:
+def generate_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, Dict[str, str]]:
     print("Generating column descriptions...")
 
     # Initialize an empty dictionary to store column descriptions and types
@@ -33,6 +50,8 @@ def get_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, Dict[str, str]
         sample_data = dataframe[column].dropna().sample(min(5, len(dataframe[column]))).tolist()
         sample_data_str = ", ".join(map(str, sample_data))
         sample_data_str = re.sub("{|}", "", sample_data_str)
+
+        response = None
 
         # Prepare the prompt for LLM
         prompt = ChatPromptTemplate.from_messages(
@@ -71,6 +90,7 @@ def get_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, Dict[str, str]
                         "column_type": "<numerical, categorical, or descriptive>"
                     }}
                     Please provide a detailed description of this column, including its potential meaning, use, and importance in a dataset. Use sample data to identify the column's meaning.
+                    Also please do not anything extra other than the output format.
                     """,
                 ),
                 ("user", "{user_input}"),
@@ -97,17 +117,17 @@ def get_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, Dict[str, str]
             }
         )
 
-        # print(f"response: {response}")
-
-        # TODO write if condition...
+        print(f"response: {response}")
 
         if response.startswith("```json"):
-            match = re.search(r"```json\n(.*?)\n```", response, re.DOTALL)
-
-            # print(f"response: {match}")
-
-            if match:
-                response = match.group(1)
+            # Extract JSON from the response (apply this consistently)
+            json_match = re.search(r"```json\n(.*?)\n```", response, re.DOTALL)
+            if json_match:
+                response = json_match.group(1)
+            else:
+                print(f"Warning: No JSON found in response for column '{column}'")
+                # Handle the case where no JSON is found (e.g., skip the column)
+                continue
 
         json_response = json.loads(response)
 
@@ -144,78 +164,35 @@ def store_descriptions_in_db(
         description = metadata["description"]
         column_type = metadata["column_type"]
 
-        # Insert or replace each column's name, description, and type into the table
-        db_driver.execute_query(
-            f"""
-            INSERT OR REPLACE INTO column_metadata (column_name, description, column_type)
-            VALUES ("{column}", "{description}", "{column_type}")
+        # Use parameterized query for security and to handle potential quotes in data
+        if isinstance(db_driver, SQLiteDriver):
+            # Insert or replace for SQLite
+            query = """
+                INSERT OR REPLACE INTO column_metadata (column_name, description, column_type)
+                VALUES (?, ?, ?)
             """
-        )
+        elif isinstance(db_driver, PostgresDriver):
+            # Insert with ON CONFLICT for Postgres
+            query = """
+                INSERT INTO column_metadata (column_name, description, column_type)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (column_name) DO UPDATE SET 
+                    description = EXCLUDED.description,
+                    column_type = EXCLUDED.column_type;
+            """
+        else:
+            raise ValueError("Unsupported database driver type")
+
+        # Pass parameters as a tuple
+        db_driver.execute_query(query, (column, description, column_type))
 
     print("Column metadata (name, description, type) stored in the database.")
 
 
-def get_chroma_collection(
-    collection_name: str,
-    client,
-    db_driver: Union[SQLiteDriver, PostgresDriver],
-    primary_key: Optional[str],
-) -> chromadb.Collection:
-
-    collections = [col.name for col in client.list_collections()]
-
-    if collection_name in collections:
-        print(f"Collection '{collection_name}' already exists, getting existing collection...")
-        chroma_collection = client.get_collection(collection_name)
-    else:
-        print(f"Collection '{collection_name}' does not exists, Creating new collection...")
-        collection = client.create_collection(collection_name)
-
-        data = db_driver.fetch_data_from_database(db_driver.db_config.dataset_table_name)
-
-        categorical_columns = data.select_dtypes(include=["object"]).columns.tolist()
-
-        if data is None:
-            raise ValueError("No data found in the database.")
-
-        if not primary_key:
-            primary_key = data.columns[0]
-
-        for index, row in data.iterrows():
-            # Extract the primary key value
-            pri_key = str(row[primary_key])
-
-            for column in categorical_columns:
-                # Extract the text for the current column and row
-                text = [str(row[column])]
-
-                # Create the ID for the current column and row
-                id = f"{column}_{pri_key}"
-
-                print(f"id: {id}")
-
-                # Create the metadata dictionary
-                meta = {
-                    "id": pri_key,
-                    "table_name": db_driver.db_config.dataset_table_name,
-                    "column_name": column,
-                }
-
-                # Add the data to the Chroma collection
-                chroma_collection = collection.add(
-                    documents=text,
-                    ids=id,
-                    metadatas=meta,
-                )
-
-        chroma_collection = client.get_collection(collection_name)
-    return chroma_collection
-
-
-def generate_column_description(df: pd.DataFrame, db_driver: Union[SQLiteDriver, PostgresDriver]):
+def generate_store_column_description(df: pd.DataFrame, db_driver: Union[SQLiteDriver, PostgresDriver], chroma_client):
 
     # Get column descriptions along with types
-    column_descriptions = get_column_descriptions(dataframe=df)
+    column_descriptions = generate_column_descriptions(dataframe=df)
 
     # Store descriptions and column types in the database
     store_descriptions_in_db(
@@ -225,3 +202,56 @@ def generate_column_description(df: pd.DataFrame, db_driver: Union[SQLiteDriver,
 
     print(column_descriptions)
     print("Column descriptions and column types stored in the database.")
+
+    collection = chroma_client.create_collection("column_info")
+
+    for column_name, metadata in column_descriptions.items():
+        collection.add(
+            documents=[metadata["description"]], ids=[column_name], metadatas=[{"column_type": metadata["column_type"]}]
+        )
+
+
+if __name__ == "__main__":
+    # SQLite configuration
+    # connection_config = SQLiteConnectionConfig(
+    #     db_file=Path(SQLITE_DB_FILE), dataset_table_name=SQL_TABLE_NAME, uri_column="URL", output_columns=OUTPUT_COLUMNS
+    # )
+
+    # Postgres configuration
+    connection_config = PostgresConnectionConfig(
+        host=SUPABASE_HOST,
+        port=int(SUPABASE_PORT),
+        user=SUPABASE_USER,
+        password=SUPABASE_PASSWORD,
+        database_name=SUPABASE_DATABASE_NAME,
+        dataset_table_name=SQL_TABLE_NAME,
+        uri_column=URL_COLUMN,
+    )
+
+    connection_driver = None
+
+    if isinstance(connection_config, SQLiteConnectionConfig):
+        connection_driver = SQLiteDriver(connection_config)
+    elif isinstance(connection_config, PostgresConnectionConfig):
+        connection_driver = PostgresDriver(connection_config)
+    elif connection_driver is None:
+        raise ValueError("Initialize or enter connection config..")
+
+    connection_driver.connect()
+
+    # ChromaDB configuration
+    # chroma_config = ChromaDBConfig(collection_name=CHROMA_COLLECTION_NAME)  # local chroma
+
+    # remote config
+    chroma_config = ChromaDBConfig(
+        collection_name=CHROMA_COLLECTION_NAME, is_local=False, host=VECTORDB_HOST, port=int(VECTORDB_PORT)
+    )
+
+    chroma_type = chroma_config.is_local
+    if chroma_type:
+        chroma_client = chromadb.PersistentClient(path=str(chroma_config.persist_path))
+    else:
+        chroma_client = chromadb.HttpClient(port=chroma_config.port, host=chroma_config.host)
+
+    df = connection_driver.fetch_data_from_database(table_name=connection_config.dataset_table_name)
+    generate_store_column_description(df=df, db_driver=connection_driver, chroma_client=chroma_client)

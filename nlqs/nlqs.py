@@ -3,20 +3,20 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
-
 import chromadb
 from langchain_openai import ChatOpenAI
 from pydantic.v1 import SecretStr
-
 from discord_bot.parameters import LOGGER_FILE
 from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
-from nlqs.description_generator import (
-    generate_column_description,
+from nlqs.parameters import OPENAI_API_KEY
+from nlqs.query import (
+    categorical_search,
+    generate_numerical_serach_query,
+    descriptive_search,
+    summarize,
     get_chroma_collection,
 )
-from nlqs.parameters import OPENAI_API_KEY
-from nlqs.query import generate_quantitaive_serach_query, qualitative_search, summarize
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ logger.addHandler(file_handler)
 @dataclass
 class ChromaDBConfig:
     collection_name: str
-    persist_path: Path = Path("./chroma")
+    persist_path: Path = Path("../chroma")
     host: str = "localhost"
     port: int = 8000
     is_local: bool = True
@@ -86,30 +86,6 @@ class NLQS:
         # TODO - Figure out if we need to create introspection table, and create
         pass
 
-    def _create_introspection_table(self):
-        driver = self.connection_driver
-
-        # Step 1
-        column_descriptions, numerical_columns, categorical_columns, descriptive_columns = (
-            driver.retrieve_descriptions_and_types_from_db()
-        )
-
-        if column_descriptions == {}:
-            # Step 2
-            generate_column_description(
-                df=self.connection_driver.fetch_data_from_database(table_name=self.table_name),
-                db_driver=self.connection_driver,
-            )
-            (column_descriptions, numerical_columns, categorical_columns, descriptive_columns) = (
-                driver.retrieve_descriptions_and_types_from_db()
-            )
-
-        print(f"column_descriptions: {column_descriptions}")
-        print(f"numerical_columns: {numerical_columns}")
-        print(f"categorical_columns: {categorical_columns}")
-        print(f"descriptive_columns: {descriptive_columns}")
-        return column_descriptions, numerical_columns, categorical_columns, descriptive_columns
-
     # Step 4
     def execute_nlqs_workflow(self, user_input: str, chat_history: List[Tuple[str, str]]) -> NLQSResult:
         """This function is where the whole interaction happens.
@@ -141,26 +117,28 @@ class NLQS:
 
         # Step 0 - Create the pre-requisite objects
 
-        # Database Connection
-        driver = self.connection_driver
-
-        column_descriptions, numerical_columns, categorical_columns, descriptive_columns = (
-            self._create_introspection_table()
-        )
-
-        primary_key = driver.get_primary_key(self.table_name)
-
-        # Chroma Collection
-        chroma_collections = get_chroma_collection(
-            collection_name=self.chroma_config.collection_name,
-            client=self.chroma_client,
-            db_driver=driver,
-            primary_key=primary_key,
-        )
-
         # Step 5
         if not user_input.strip():
             result = NLQSResult(records=[], uris=[])
+            return result
+
+        # Database Connection
+        driver = self.connection_driver
+
+        # TODO: We should not retrieve column descriptions and chroma collections for every user query.
+        column_descriptions, numerical_columns, categorical_columns, descriptive_columns = (
+            driver.retrieve_descriptions_and_types_from_db()
+        )
+
+        if column_descriptions == {}:
+            raise ValueError("No column descriptions found in the database. Generate Column descriptions.")
+
+        primary_key = driver.get_primary_key(self.table_name)
+
+        # Chroma Collection: descriptive_collection, categorical_collection
+        descriptive_collection, categorical_collection = get_chroma_collection(
+            collection_name=self.chroma_config.collection_name, client=self.chroma_client
+        )
 
         # Step 6
         user_input = re.sub(r"{|}", "", user_input)
@@ -207,32 +185,34 @@ class NLQS:
             if summarized_input.user_requested_columns:
                 numerical_data = summarized_input.numerical_data
                 categorical_data = summarized_input.categorical_data
-                # TODO: use descriptive data...
                 descriptive_data = summarized_input.descriptive_data
 
-                quantitaive_query = generate_quantitaive_serach_query(numerical_data, self.table_name, primary_key)
-                quantitative_ids_uncleaned = driver.execute_query(quantitaive_query)
+                numerical_query = generate_numerical_serach_query(numerical_data, self.table_name, primary_key)
+                numerical_ids_uncleaned = driver.execute_query(numerical_query)
 
-                quantitative_ids = []
+                numerical_ids = []
 
-                if quantitative_ids_uncleaned:
-                    quantitative_ids = [item[0] for item in quantitative_ids_uncleaned]
-                    print(f"quantitative_ids: {quantitative_ids}")
+                if numerical_ids_uncleaned:
+                    numerical_ids = [item[0] for item in numerical_ids_uncleaned]
+                    print(f"numerical_ids: {numerical_ids}")
 
-                qualitative_ids = qualitative_search(chroma_collections, categorical_data, primary_key)
-                print(f"qualitative_ids: {qualitative_ids}")
+                categorical_ids = categorical_search(categorical_collection, categorical_data, driver, primary_key)
+                print(f"categorical_ids: {categorical_ids}")
+
+                descriptive_ids = descriptive_search(descriptive_collection, descriptive_data, primary_key)
+                print(f"descriptive_ids: {descriptive_ids}")
 
                 # Find the intersection of quantitative_ids and qualitative_ids
-                if not quantitative_ids or not qualitative_ids:
-                    intersection_ids = quantitative_ids or qualitative_ids
+                if not numerical_ids or not descriptive_ids or not categorical_ids:
+                    intersection_ids = numerical_ids or descriptive_ids or categorical_ids
                 else:
-                    intersection_ids = list(set(quantitative_ids) & set(qualitative_ids))
+                    intersection_ids = list(set(numerical_ids) & set(descriptive_ids) & set(categorical_ids))
 
                 # Ensure intersection_ids is set to qualitative_ids if it's empty
                 if not intersection_ids:
-                    intersection_ids = qualitative_ids
+                    intersection_ids = descriptive_ids
 
-                print(intersection_ids)
+                print(f"intersection_ids: {intersection_ids}")
 
                 # Initial query to retrieve all columns based on the intersection IDs
                 final_query = f"SELECT * FROM {self.table_name} WHERE {primary_key} IN ({','.join(str(id) for id in intersection_ids)})"
