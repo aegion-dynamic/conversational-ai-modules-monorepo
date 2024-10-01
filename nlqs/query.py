@@ -193,6 +193,19 @@ def summarize(
     return summarized_input
 
 
+def columns_chroma_lookup(
+    chroma_client, numerical_data: Dict[str, str], categorical_data: Dict[str, str], descriptive_data: Dict[str, str]
+):
+    collection = chroma_client.get_collection(name="column_info")
+    for item, value in numerical_data:
+        column = collection.query(query_texts=[value], n_results=1).get("documents")[0][0]
+        # numerical_data[item] = column
+        print(f"original column: {item}")
+        print(f"column: {column}")
+
+    pass
+
+
 def generate_numerical_serach_query(quantitaive_data: Dict[str, str], table_name: str, primary_key: str) -> str:
     """Creates an SQL query from a dictionary of quantitative data.
 
@@ -291,13 +304,15 @@ def categorical_search(
     for column, condition in data.items():
         query_result = collection.query(query_texts=[condition], n_results=1, where={"column_name": column})
 
-        # print(f"Query result: {query_result["documents"]}")
+        print(f"Query result: {query_result["documents"]}")
+
 
         if query_result["documents"]:
             ids_for_column = set()
+            print(f"Query result: {query_result["documents"][0]}")  
 
             # Extract the string directly
-            query_value = query_result["documents"][0][0]  # Get the first element of the list
+            query_value = query_result["documents"][0]  # Get the first element of the list
 
             # Use parameter binding
             query = (

@@ -129,18 +129,18 @@ def generate_chroma_collection(
 if __name__ == "__main__":
 
     # SQLite configuration
-    # connection_config = SQLiteConnectionConfig(db_file=Path(SQLITE_DB_FILE), dataset_table_name=SQL_TABLE_NAME)
+    connection_config = SQLiteConnectionConfig(db_file=Path(SQLITE_DB_FILE), dataset_table_name=SQL_TABLE_NAME)
 
     # Postgres configuration
-    connection_config = PostgresConnectionConfig(
-        host=SUPABASE_HOST,
-        port=int(SUPABASE_PORT),
-        user=SUPABASE_USER,
-        password=SUPABASE_PASSWORD,
-        database_name=SUPABASE_DATABASE_NAME,
-        dataset_table_name=SQL_TABLE_NAME,
-        uri_column=URL_COLUMN,
-    )
+    # connection_config = PostgresConnectionConfig(
+    #     host=SUPABASE_HOST,
+    #     port=int(SUPABASE_PORT),
+    #     user=SUPABASE_USER,
+    #     password=SUPABASE_PASSWORD,
+    #     database_name=SUPABASE_DATABASE_NAME,
+    #     dataset_table_name=SQL_TABLE_NAME,
+    #     uri_column=URL_COLUMN,
+    # )
 
     connection_driver = None
 
@@ -154,18 +154,18 @@ if __name__ == "__main__":
     connection_driver.connect()
 
     # ChromaDB configuration
-    # chroma_config = ChromaDBConfig(
-    #     collection_name=CHROMA_COLLECTION_NAME,
-    #     persist_path=Path("D://work//conversational-ai-modules-monorepo//chroma"),
-    # )  # local chroma
+    chroma_config = ChromaDBConfig(
+        collection_name=CHROMA_COLLECTION_NAME,
+        persist_path=Path("../chroma"),
+    )  # local chroma
 
     # remote config
-    chroma_config = ChromaDBConfig(
-        collection_name=CHROMA_COLLECTION_NAME, is_local=False, host=VECTORDB_HOST, port=int(VECTORDB_PORT)
-    )
+    # chroma_config = ChromaDBConfig(
+    #     collection_name=CHROMA_COLLECTION_NAME, is_local=False, host=VECTORDB_HOST, port=int(VECTORDB_PORT)
+    # )
 
     chroma_type = chroma_config.is_local
-    print(f"chroma_config.persist_path: {chroma_config.persist_path.parent.absolute()}")
+    # print(f"chroma_config.persist_path: {chroma_config.persist_path.parent.absolute()}")
     if chroma_type:
         chroma_client = chromadb.PersistentClient(path=str(chroma_config.persist_path))
     else:

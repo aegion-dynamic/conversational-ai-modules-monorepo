@@ -9,7 +9,6 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic.v1 import SecretStr
 from pathlib import Path
-from discord_bot.parameters import VECTORDB_PORT
 from nlqs.database.postgres import PostgresDriver
 from nlqs.database.sqlite import SQLiteDriver
 from nlqs.nlqs import ChromaDBConfig
@@ -29,6 +28,7 @@ from scripts.parameters import (
     SUPABASE_USER,
     URL_COLUMN,
     VECTORDB_HOST,
+    VECTORDB_PORT,
 )
 
 
@@ -75,12 +75,12 @@ def generate_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, Dict[str,
 
                     
                     For example:
-                    "Product": "This column contains the name of the product. It is a text field and can be used for exact or partial matches.",
-                    "Category": "This column contains the category of the product. It is a text field and can be used for exact or partial matches.",
-                    "MedicalBenefits": "This column contains the medical benefits of the product. It is a text field and can be used for exact or partial matches.",
-                    "CustomerRating": "This column contains the customer rating of the product. It is a numerical field and can be used for exact matches or range comparisons.",
-                    "PurchaseFrequency": "This column contains the frequency of product purchase. It is a text field and can be used for exact or partial matches.",
-                    "description": "This column contains the description of the product. It is a text field and can be used for exact or partial matches."
+                    "Product": "This column contains the name of the product. It is a text field and can be used for exact or partial matches.", "column_type": "descriptive"
+                    "Category": "This column contains the category of the product. It is a text field and can be used for exact or partial matches.", "column_type": "categorical"
+                    "MedicalBenefits": "This column contains the medical benefits of the product. It is a text field and can be used for exact or partial matches.", "column_type": "descriptive"
+                    "CustomerRating": "This column contains the customer rating of the product. It is a numerical field and can be used for exact matches or range comparisons.", "column_type": "numerical"
+                    "PurchaseFrequency": "This column contains the frequency of product purchase. It is a text field and can be used for exact or partial matches.", "column_type": "categorical"
+                    "description": "This column contains the description of the product. It is a text field and can be used for exact or partial matches.", "column_type": "descriptive"
                     
                                         
                     Output format:
@@ -98,7 +98,7 @@ def generate_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, Dict[str,
         )
 
         llm = ChatOpenAI(
-            model="gpt-4o",
+            model="gpt-4",
             api_key=SecretStr(OPENAI_API_KEY),
             temperature=0.0,
             verbose=True,
@@ -113,7 +113,7 @@ def generate_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, Dict[str,
                 "column": column,
                 "col_type": col_type,
                 "sample_data_str": sample_data_str,
-                "user_input": "Please provide a detailed description of each column in the given dataset.",
+                "user_input": "Please provide a detailed description of the column in the given dataset using the specified format. Additionally, include sample data in the description.",
             }
         )
 
@@ -161,30 +161,41 @@ def store_descriptions_in_db(
     )
 
     for column, metadata in descriptions.items():
-        description = metadata["description"]
-        column_type = metadata["column_type"]
+        description = metadata.get("description")
+        column_type = metadata.get("column_type")
 
-        # Use parameterized query for security and to handle potential quotes in data
+        # Log the values to ensure they are correct
+        print(f"Inserting column: {column}, description: {description}, type: {column_type}")
+
+        # Check if all required fields are present
+        if not column or not description or not column_type:
+            print(f"Skipping column {column} due to missing data")
+            continue
+
         if isinstance(db_driver, SQLiteDriver):
-            # Insert or replace for SQLite
-            query = """
+            # SQLite syntax for inserting or replacing records
+            query = f"""
                 INSERT OR REPLACE INTO column_metadata (column_name, description, column_type)
-                VALUES (?, ?, ?)
+                VALUES ('{column}', '{description.replace("'", "''")}', '{column_type}')
             """
         elif isinstance(db_driver, PostgresDriver):
-            # Insert with ON CONFLICT for Postgres
-            query = """
+            # Postgres syntax for inserting with ON CONFLICT clause
+            query = f"""
                 INSERT INTO column_metadata (column_name, description, column_type)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (column_name) DO UPDATE SET 
+                VALUES ('{column}', '{description.replace("'", "''")}', '{column_type}')
+                ON CONFLICT (column_name) DO UPDATE SET
                     description = EXCLUDED.description,
                     column_type = EXCLUDED.column_type;
             """
         else:
             raise ValueError("Unsupported database driver type")
 
-        # Pass parameters as a tuple
-        db_driver.execute_query(query, (column, description, column_type))
+        # Error handling for query execution
+        try:
+            print(f"Executing query: {query}")  # Log the full query
+            db_driver.execute_query(query)
+        except Exception as e:
+            print(f"Error inserting column {column}: {e}")
 
     print("Column metadata (name, description, type) stored in the database.")
 

@@ -12,6 +12,7 @@ from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
 from nlqs.parameters import OPENAI_API_KEY
 from nlqs.query import (
     categorical_search,
+    columns_chroma_lookup,
     generate_numerical_serach_query,
     descriptive_search,
     summarize,
@@ -186,6 +187,13 @@ class NLQS:
                 numerical_data = summarized_input.numerical_data
                 categorical_data = summarized_input.categorical_data
                 descriptive_data = summarized_input.descriptive_data
+
+                # columns_chroma_lookup(
+                #     chroma_client=self.chroma_client,
+                #     numerical_data=numerical_data,
+                #     categorical_data=categorical_data,
+                #     descriptive_data=descriptive_data,
+                # )
 
                 numerical_query = generate_numerical_serach_query(numerical_data, self.table_name, primary_key)
                 numerical_ids_uncleaned = driver.execute_query(numerical_query)

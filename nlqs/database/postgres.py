@@ -67,12 +67,11 @@ class PostgresDriver(AbstractDriver):
             self._db_connection.close()
             logger.info("Disconnected from PostgreSQL database.")
 
-    def execute_query(self, query: str, params: Optional[Union[Tuple, List]] = None) -> Optional[List[Tuple[Any]]]:
+    def execute_query(self, query: str) -> Optional[List[Tuple[Any]]]:
         """Executes the SQL query and returns the result.
 
         Args:
             query (str): the SQL query.
-            params (Optional[Union[Tuple, List]], optional): A tuple or list of parameters to be used with the query. Defaults to None.
 
         Returns:
             Optional[List[Tuple]]: the result of the query as a list of tuples, or None if no results.
@@ -87,11 +86,7 @@ class PostgresDriver(AbstractDriver):
         try:
             logger.info(f"Executing query: {query}")
 
-            # Execute the query with parameters if provided
-            if params:
-                self.cursor.execute(query, params)
-            else:
-                self.cursor.execute(query)
+            self.cursor.execute(query)
 
             # Only fetch results if the query is a SELECT statement
             if query.lower().startswith("select"):

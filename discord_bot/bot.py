@@ -13,7 +13,14 @@ from discord_bot.memory import (
     set_user_active,
     set_user_inactive,
 )
-from discord_bot.parameters import CHROMA_COLLECTION_NAME, OUTPUT_COLUMNS, SQL_TABLE_NAME, SQLITE_DB_FILE
+from discord_bot.parameters import (
+    CHROMA_COLLECTION_NAME,
+    OUTPUT_COLUMNS,
+    SQL_TABLE_NAME,
+    SQLITE_DB_FILE,
+    VECTORDB_PORT,
+    VECTORDB_HOST,
+)
 from discord_bot.state import BotState, empty_active_users, new_user, user_exists
 from expert_system.conversation import Chatbot
 from nlqs.database.postgres import PostgresConnectionConfig
@@ -25,25 +32,28 @@ global_state = BotState.IDLE
 
 
 # ChromaDB configuration
-chroma_config = ChromaDBConfig(
-    collection_name=CHROMA_COLLECTION_NAME, persist_path=Path("D://work//conversational-ai-modules-monorepo//chroma")
-)
+chroma_config = ChromaDBConfig(collection_name=CHROMA_COLLECTION_NAME, persist_path=Path("../chroma"))
+
+# remote config
+# chroma_config = ChromaDBConfig(
+#     collection_name=CHROMA_COLLECTION_NAME, is_local=False, host=VECTORDB_HOST, port=int(VECTORDB_PORT)
+# )
 
 
 # SQLite configuration
-# sqlite_config = SQLiteConnectionConfig(
-#     db_file=Path(SQLITE_DB_FILE), dataset_table_name=SQL_TABLE_NAME, uri_column="URL", output_columns=OUTPUT_COLUMNS
-# )
-
-postgres_config = PostgresConnectionConfig(
-    host="aws-0-us-east-1.pooler.supabase.com",
-    port=6543,
-    user="postgres.xdvwtpqclkedpktjsrzc",
-    password="aOoDlcdghQ39Gkjr",
-    database_name="postgres",
-    dataset_table_name="new_dataset",
-    uri_column="URL",
+sqlite_config = SQLiteConnectionConfig(
+    db_file=Path(SQLITE_DB_FILE), dataset_table_name=SQL_TABLE_NAME, uri_column="URL", output_columns=OUTPUT_COLUMNS
 )
+
+# postgres_config = PostgresConnectionConfig(
+#     host="aws-0-us-east-1.pooler.supabase.com",
+#     port=6543,
+#     user="postgres.xdvwtpqclkedpktjsrzc",
+#     password="aOoDlcdghQ39Gkjr",
+#     database_name="postgres",
+#     dataset_table_name="new_dataset",
+#     uri_column="URL",
+# )
 
 
 def create_bot() -> commands.Bot:
@@ -128,7 +138,7 @@ def create_bot() -> commands.Bot:
                 # Set the typing state on the channel
                 await message.channel.typing()
 
-                nlqs_instance = NLQS(postgres_config, chroma_config)
+                nlqs_instance = NLQS(sqlite_config, chroma_config)
                 queried_data = nlqs_instance.execute_nlqs_workflow(user_input, chat_history)
 
                 if queried_data is None:
