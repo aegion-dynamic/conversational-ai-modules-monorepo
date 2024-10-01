@@ -61,7 +61,6 @@ def summarize(
     numerical_columns: List[str],
     descriptive_columns: List[str],
     categorical_columns: List[str],
-    descriptive_columns: List[str],
     llm: Union[ChatOpenAI, OpenAI],
 ) -> SummarizedInput:
     """Summarizes the user input and returns the summary, quantitative data, and qualitative data, along with the user requested columns in a JSON format.
@@ -195,9 +194,6 @@ def summarize(
 
     summarized_input = SummarizedInput(
         summary=summarized_input_dict.get("summary", ""),
-        numerical_data=summarized_input_dict.get("numerical_data", {}),
-        categorical_data=summarized_input_dict.get("categorical_data", {}),
-        descriptive_data=summarized_input_dict.get("descriptive_data", {}),
         numerical_data=summarized_input_dict.get("numerical_data", {}),
         categorical_data=summarized_input_dict.get("categorical_data", {}),
         descriptive_data=summarized_input_dict.get("descriptive_data", {}),

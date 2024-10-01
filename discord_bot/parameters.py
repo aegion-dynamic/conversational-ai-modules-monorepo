@@ -22,3 +22,8 @@ SUPABASE_PORT = os.getenv("SUPABASE_PORT", "replace with actual key")
 SUPABASE_USER = os.getenv("SUPABASE_USER", "replace with actual key")
 SUPABASE_PASSWORD = os.getenv("SUPABASE_PASSWORD", "replace with actual key")
 SUPABASE_DATABASE_NAME = os.getenv("SUPABASE_DATABASE_NAME", "replace with actual key")
+
+VECTORDB_HOST = os.getenv("VECTORDB_HOST", "replace with actual key")
+VECTORDB_PORT = os.getenv("VECTORDB_PORT", "replace with actual key")
+VECTORDB_USERNAME = os.getenv("VECTORDB_USERNAME", "replace with actual key")
+VECTORDB_PASSWORD = os.getenv("VECTORDB_PASSWORD", "replace with actual key")
