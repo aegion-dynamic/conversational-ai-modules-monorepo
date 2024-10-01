@@ -13,7 +13,7 @@ from nlqs.parameters import OPENAI_API_KEY
 from nlqs.query import (
     categorical_search,
     columns_chroma_lookup,
-    generate_numerical_serach_query,
+    generate_numerical_search_query,
     descriptive_search,
     summarize,
     get_chroma_collection,
@@ -195,7 +195,7 @@ class NLQS:
                 #     descriptive_data=descriptive_data,
                 # )
 
-                numerical_query = generate_numerical_serach_query(numerical_data, self.table_name, primary_key)
+                numerical_query = generate_numerical_search_query(numerical_data, self.table_name, primary_key)
                 numerical_ids_uncleaned = driver.execute_query(numerical_query)
 
                 numerical_ids = []

@@ -111,12 +111,13 @@ def summarize(
 
                 2. **Structured Analysis**: For all other inputs, analyze the user input and identify key details based on our available data and chat history.
                 
-                3. Summarize the input, classifying the data into qualitative and quantitative categories.
+                3. Summarize the input, classifying the data into categorical_data, descriptive_data and categorical_data categories.
                 
                 4. Identify relevant columns from which we can provide an answer. Pay close attention to the user's intent and specific mentions of data columns:
                 - Are they seeking information about products, medications, treatments, or other relevant categories?
                 - If the user is seeking information about a product, also provide the URL of the product if available.
                 - Look for explicit mentions of column names, synonyms, or phrases that indicate the type of information requested. If the user specifies certain attributes or metrics, consider these as user-requested columns.
+                - Relevant data is provided, use that data to classify the columns.
 
                 5. Classify the user's intent. Possible intents include: phatic_communication, sql_injection, profanity, and other.
 
@@ -140,7 +141,6 @@ def summarize(
                                         "column name": "Data mentioned about that column by the user",
                                         "column name": "Data mentioned about that column by the user",
                                         `,
-                    "descriptive_data":
                     "categorical_data": 
                                         ` 
                                         "column name": "Data mentioned about that column by the user",
@@ -217,20 +217,12 @@ def columns_chroma_lookup(
     pass
 
 
-def generate_numerical_serach_query(quantitaive_data: Dict[str, str], table_name: str, primary_key: str) -> str:
-    """Creates an SQL query from a dictionary of quantitative data.
-
-    Args:
-        quantitaive_data (dict): A dictionary of quantitative data in the form {'column_name': 'condition'}.
-
-    Returns:
-        str: The generated SQL query.
-    """
-    if not quantitaive_data:
+def generate_numerical_search_query(quantitative_data: Dict[str, str], table_name: str, primary_key: str) -> str:
+    if not quantitative_data:
         return ""  # Return an empty string if the dictionary is empty
 
     query_parts = []
-    for column, condition in quantitaive_data.items():
+    for column, condition in quantitative_data.items():
         # Handle different comparison operators
         if "<" in condition:
             operator = "<"
@@ -248,14 +240,19 @@ def generate_numerical_serach_query(quantitaive_data: Dict[str, str], table_name
         # Extract the value from the condition
         value = condition.replace(operator, "").strip()
 
-        # Construct the query part
-        query_part = f"{column} {operator} {value}"
+        # Handle quoting for string values
+        if not value.isdigit():  # Add single quotes for non-numeric values
+            value = f"'{value}'"
+
+        # Construct the query part with column name in double quotes
+        query_part = f'"{column}" {operator} {value}'
         query_parts.append(query_part)
 
     # Combine the query parts with AND
     query_constraints = " AND ".join(query_parts)
 
-    query = f"select {primary_key} from {table_name} where {query_constraints}"
+    # Construct the final query with table and primary key also in double quotes
+    query = f'SELECT "{primary_key}" FROM "{table_name}" WHERE {query_constraints}'
     return query
 
 
@@ -323,11 +320,11 @@ def categorical_search(
             print(f"Query result: {query_result["documents"][0]}")  
 
             # Extract the string directly
-            query_value = query_result["documents"][0]  # Get the first element of the list
+            query_value = query_result["documents"][0][0]  # Get the first element of the list
 
             # Use parameter binding
             query = (
-                f"SELECT {primary_key} FROM {db_driver.db_config.dataset_table_name} WHERE {column} = '{query_value}'"
+                f'SELECT {primary_key} FROM {db_driver.db_config.dataset_table_name} WHERE "{column}" = \'{query_value}\''
             )
             ids_for_column_uncleaned = db_driver.execute_query(query)
 
