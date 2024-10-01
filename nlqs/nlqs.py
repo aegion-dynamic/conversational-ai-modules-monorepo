@@ -152,6 +152,7 @@ class NLQS:
             numerical_columns=numerical_columns,
             categorical_columns=categorical_columns,
             descriptive_columns=descriptive_columns,
+            descriptive_columns=descriptive_columns,
             llm=self.llm,
         )
 
@@ -164,6 +165,7 @@ class NLQS:
                 column_descriptions_dictionary=column_descriptions,
                 numerical_columns=numerical_columns,
                 categorical_columns=categorical_columns,
+                descriptive_columns=descriptive_columns,
                 descriptive_columns=descriptive_columns,
                 llm=self.llm,
             )

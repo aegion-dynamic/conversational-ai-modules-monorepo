@@ -24,6 +24,9 @@ class SummarizedInput:
     numerical_data: Dict[str, str]
     categorical_data: Dict[str, str]
     descriptive_data: Dict[str, str]
+    numerical_data: Dict[str, str]
+    categorical_data: Dict[str, str]
+    descriptive_data: Dict[str, str]
     user_requested_columns: List[str]
     user_intent: str
 
@@ -58,6 +61,7 @@ def summarize(
     numerical_columns: List[str],
     descriptive_columns: List[str],
     categorical_columns: List[str],
+    descriptive_columns: List[str],
     llm: Union[ChatOpenAI, OpenAI],
 ) -> SummarizedInput:
     """Summarizes the user input and returns the summary, quantitative data, and qualitative data, along with the user requested columns in a JSON format.
@@ -125,11 +129,19 @@ def summarize(
                 `
                     "summary": "summary of the user input",
                     "numerical_data":
+                    "numerical_data":
                                         ` 
                                         "column name": "Data mentioned about that column by the user. Example- < 4",
                                         "column name": "Data mentioned about that column by the user. Example- > 6.215",
                                         "column name": "Data mentioned about that column by the user. Example- >= 3.14 or <= 2.718",
                                         `,
+                    "categorical_data": 
+                                        ` 
+                                        "column name": "Data mentioned about that column by the user",
+                                        "column name": "Data mentioned about that column by the user",
+                                        "column name": "Data mentioned about that column by the user",
+                                        `,
+                    "descriptive_data":
                     "categorical_data": 
                                         ` 
                                         "column name": "Data mentioned about that column by the user",
@@ -183,6 +195,9 @@ def summarize(
 
     summarized_input = SummarizedInput(
         summary=summarized_input_dict.get("summary", ""),
+        numerical_data=summarized_input_dict.get("numerical_data", {}),
+        categorical_data=summarized_input_dict.get("categorical_data", {}),
+        descriptive_data=summarized_input_dict.get("descriptive_data", {}),
         numerical_data=summarized_input_dict.get("numerical_data", {}),
         categorical_data=summarized_input_dict.get("categorical_data", {}),
         descriptive_data=summarized_input_dict.get("descriptive_data", {}),

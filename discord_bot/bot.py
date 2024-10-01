@@ -45,6 +45,7 @@ sqlite_config = SQLiteConnectionConfig(
     db_file=Path(SQLITE_DB_FILE), dataset_table_name=SQL_TABLE_NAME, uri_column="URL", output_columns=OUTPUT_COLUMNS
 )
 
+
 # postgres_config = PostgresConnectionConfig(
 #     host="aws-0-us-east-1.pooler.supabase.com",
 #     port=6543,
