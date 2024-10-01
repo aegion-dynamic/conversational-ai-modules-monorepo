@@ -16,6 +16,18 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+# The schema for the PostgreSQL database is defined here
+# the top-level key is the table name, and the value is a dictionary 
+# with the column name and type
+POSTGRES_SCHEMA = {
+    "column_metadata": {
+        "column_name": "TEXT",
+        "column_type": "TEXT",
+        "description": "TEXT",
+    }
+}
+
+
 @dataclass
 class PostgresConnectionConfig:
     host: str
@@ -130,6 +142,7 @@ class PostgresDriver(AbstractDriver):
             self._db_connection.rollback()
             logger.error(f"Error retrieving descriptions and types: {e}")
             return {}, [], [], []
+          
 
     def get_database_columns(self, table_name: str) -> List[str]:
         """Returns the columns in the specified table in the order they appear in the database.
@@ -268,6 +281,62 @@ class PostgresDriver(AbstractDriver):
         except psycopg2.Error as e:
             raise psycopg2.Error(f"Error getting primary key from table '{table_name}': {e}")
 
+    def validate_db_schema(self) -> bool:
+        """Validates the database schema by checking if the required tables exist.
+
+        Returns:
+            bool: True if the schema is valid, False otherwise.
+        """
+        if self.cursor is None or self._db_connection is None:
+            raise ValueError("Database connection not established.")
+
+        # Generate the SQL queryt to see if the tables and the corresponding columns exist in the database
+        query = """
+            SELECT table_name, column_name, data_type, is_nullable, column_default
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+            ORDER BY table_name, ordinal_position;
+        """
+
+        try:
+            self.cursor.execute(query)
+            result = self.cursor.fetchall()
+            
+            
+            if result:
+                # Check to see if the table names are present in the database
+                for row in result:
+                    if row[0] not in POSTGRES_SCHEMA.keys():
+                        logger.error(f"Table {row[0]} not found in database.")
+                        return False
+
+                # Check to see if column names for each table are present in the database
+                for table_name, column_info_dict in result:
+                    for column_name, column_type in column_info_dict.items():
+                        # add it to the list
+                        if column_name not in POSTGRES_SCHEMA[table_name]:
+                            logger.error(f"Column {column_name} not found in table {table_name}.")
+                            return False
+                        
+                        # check if the column type matches
+                        if column_type != POSTGRES_SCHEMA[table_name][column_name]:
+                            logger.warning(f"Column {column_name} in table {table_name} has incorrect type.")
+                            # return False
+            
+
+            else:
+                logger.error("No results returned for introspection query in the database.")
+                return False
+            
+            return True
+
+        except psycopg2.Error as e:
+            logger.error(f"Error querying database schema: {e}")
+            return False
+        
+
+
+    
     @property
     def db_connection(self):
         if self._db_connection is None:
