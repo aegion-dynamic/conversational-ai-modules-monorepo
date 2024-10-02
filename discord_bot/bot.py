@@ -134,7 +134,7 @@ def create_bot() -> commands.Bot:
                 await message.channel.typing()
 
                 nlqs_instance = NLQS(sqlite_config, chroma_config)
-                queried_data = nlqs_instance.execute_nlqs_workflow(user_input, chat_history)
+                queried_data = nlqs_instance.execute_nlqs_query_workflow(user_input, chat_history)
 
                 if queried_data is None:
                     print("ERROR - Summarization failed")

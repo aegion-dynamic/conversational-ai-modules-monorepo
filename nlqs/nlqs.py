@@ -1,4 +1,5 @@
 import logging
+from math import fabs
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,9 +11,9 @@ from pydantic.v1 import SecretStr
 
 from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
-from nlqs.description_generator import get_chroma_collection
 from nlqs.parameters import OPENAI_API_KEY
 from nlqs.query import generate_quantitaive_search_query, qualitative_search, summarize
+from nlqs.vectordb_driver import ChromaDBConfig, VectorDBDriver
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -33,19 +34,12 @@ stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
 
 
-@dataclass
-class ChromaDBConfig:
-    collection_name: str
-    persist_path: Path = Path("./chroma")
-    host: str = "localhost"
-    port: int = 8000
-    is_local: bool = True
-
 
 @dataclass
 class NLQSResult:
     records: List[Dict[str, Any]]
     uris: List[str]
+    is_input_irrelevant: bool = False
 
 
 class NLQS:
@@ -69,21 +63,21 @@ class NLQS:
         self.llm = ChatOpenAI(temperature=0, model="gpt-4-turbo", api_key=SecretStr(OPENAI_API_KEY), max_tokens=1000)
 
         self.chroma_config = chroma_config
-        chroma_type = chroma_config.is_local
-        if chroma_type:
-            self.chroma_client = chromadb.PersistentClient(path=str(self.chroma_config.persist_path))
-        else:
-            self.chroma_client = chromadb.HttpClient(port=chroma_config.port, host=chroma_config.host)
+        self.vectordb_driver = VectorDBDriver(chroma_config)
+
 
         self.table_name = connection_config.dataset_table_name
         self.uri_column = connection_config.uri_column
         self.output_columns = connection_config.output_columns
 
-        # TODO - Figure out if we need to create introspection table, and create
-        pass
+        # Test if all infrastructure is available
+        if (self.vectordb_driver.check_nlqs_collections_exists() is False):
+            raise ValueError("ChromaDB collections do not exist. Please create them.")
+        
+
 
     # Step 4
-    def execute_nlqs_workflow(self, user_input: str, chat_history: List[Tuple[str, str]]) -> NLQSResult:
+    def execute_nlqs_query_workflow(self, user_input: str, chat_history: List[Tuple[str, str]]) -> NLQSResult:
         """This function is where the whole interaction happens.
         It takes the user input and chat history as input and returns the response if the user's intent is either phatic_communication, profanity or sql_injection.
         Else it returns the query result or search similarity result.
@@ -129,12 +123,12 @@ class NLQS:
         primary_key = driver.get_primary_key(self.table_name)
 
         # Chroma Collection
-        chroma_collections = get_chroma_collection(
+        chroma_collections = self.vectordb_driver.get_chroma_collection(
             collection_name=self.chroma_config.collection_name,
-            client=self.chroma_client,
-            db_driver=driver,
-            primary_key=primary_key,
         )
+
+        if chroma_collections is None:
+            raise ValueError("Chroma Collection not found in vectordb. Please create a collection.")
 
         # Step 5
         if not user_input.strip():
@@ -152,6 +146,7 @@ class NLQS:
             categorical_columns=categorical_columns,
             descriptive_columns=descriptive_columns,
             llm=self.llm,
+            vectordb=self.vectordb_driver,
         )
 
         count = 0
@@ -165,6 +160,7 @@ class NLQS:
                 categorical_columns=categorical_columns,
                 descriptive_columns=descriptive_columns,
                 llm=self.llm,
+                vectordb=self.vectordb_driver,
             )
             count += 1
             if count == 5:
@@ -178,8 +174,11 @@ class NLQS:
         logger.info(f"Summarized input: {summarized_input}")
 
         if intent == "sql_injection":
-            result = NLQSResult(records=[], uris=[])
-
+            # Kill the workflow if the user input is a SQL injection
+            return NLQSResult(records=[], uris=[], is_input_irrelevant=True)
+        elif intent == "phatic_communication":
+            # Kill the workflow if the user input is phatic communication
+            return NLQSResult(records=[], uris=[], is_input_irrelevant=True)
         else:
             print("checking for user requested columns...")
             if summarized_input.user_requested_columns:

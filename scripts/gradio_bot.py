@@ -30,8 +30,8 @@ with gr.Blocks(title="LUNA Chatbot") as demo:
 
     nlqs_instance = NLQS(sqlite_config, chroma_config)
 
-    msg.submit(nlqs_instance.execute_nlqs_workflow, [msg, chatbot], [msg, chatbot])
-    btn.click(nlqs_instance.execute_nlqs_workflow, [msg, chatbot], [msg, chatbot])
+    msg.submit(nlqs_instance.execute_nlqs_query_workflow, [msg, chatbot], [msg, chatbot])
+    btn.click(nlqs_instance.execute_nlqs_query_workflow, [msg, chatbot], [msg, chatbot])
 
 try:
     demo.launch(debug=True, share=True)

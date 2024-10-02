@@ -3,13 +3,13 @@ import logging
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Union
 
-from attr import In, validate
 import chromadb
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI, OpenAI
 from typing import TypedDict
 
+from nlqs.vectordb_driver import ColumnType, VectorDBDriver
 from utils.json_outputs import validate_llm_output_keys
 
 # Create a logger object
@@ -20,6 +20,8 @@ logger.setLevel(logging.INFO)
 
 
 class InputIntent(TypedDict):
+    """Class to represent the input intent."""
+    
     summary: str
     user_intent: str
     qualitative_statements: List[str]
@@ -34,6 +36,7 @@ class SummarizedInput:
     numerical_data: Dict[str, str]
     categorical_data: Dict[str, str]
     descriptive_data: Dict[str, str]
+    identifier_data: Dict[str, str]
     user_requested_columns: List[str]
     user_intent: str
 
@@ -47,9 +50,8 @@ REFERENCE_SUMMARIZED_INTENT_DICT = {
 
 
 REFERENCE_SUMMARIZED_OUTPUT_DICT = {
-    "numerical_data": {},
-    "categorical_data": {},
-    "descriptive_data": {},
+    "quantitative_data": {},
+    "qualitative_data": {},
     "user_requested_columns": [],
 }
 
@@ -85,6 +87,7 @@ def summarize(
     categorical_columns: List[str],
     descriptive_columns: List[str],
     llm: Union[ChatOpenAI, OpenAI],
+    vectordb: VectorDBDriver,
 ) -> SummarizedInput:
     """Summarizes the user input and returns the summary, quantitative data, and qualitative data, along with the user requested columns in a JSON format.
 
@@ -243,19 +246,13 @@ def summarize(
                 
                 The output JSON should have the following structure:
                 `
-                    "numerical_data":
+                    "quantitiave_data":
                                         ` 
                                         "column name": "Data mentioned about that column by the user. Example- < 4",
                                         "column name": "Data mentioned about that column by the user. Example- > 6.215",
                                         "column name": "Data mentioned about that column by the user. Example- >= 3.14 or <= 2.718",
                                         `,
-                    "categorical_data": 
-                                        ` 
-                                        "column name": "Data mentioned about that column by the user",
-                                        "column name": "Data mentioned about that column by the user",
-                                        "column name": "Data mentioned about that column by the user",
-                                        `,
-                    "descriptive_data":
+                    "qualitative_data": 
                                         ` 
                                         "column name": "Data mentioned about that column by the user",
                                         "column name": "Data mentioned about that column by the user",
@@ -311,11 +308,74 @@ def summarize(
     logger.info(f"user input: {user_input}")
     logger.info(f"Summarized input: {summarized_input_dict}")
 
+
+    # Validate the qualitative and quantitative columns against the available data columns / 
+    # pick the most relevant columns
+    numerical_data = {}
+    categorical_data = {}
+    descriptive_data = {}
+    identifier_data = {}
+
+    # Go through each of the qualitative and quantitative maps check if the column is present in the data
+    for column_name, description in summarized_input_dict.get("quantitative_data", {}).items():
+        if column_name not in column_descriptions_dictionary:
+            closest_column_name, column_type = vectordb.get_closest_column_from_description(
+                approximate_column_name=column_name,
+                users_description=description,
+                sample_data_strings=[],
+            )
+
+            if closest_column_name not in column_descriptions_dictionary:
+                raise ValueError(f"Closest column name '{closest_column_name}' not found in chroma columns collection.")
+            
+            # Add the column to the corresponding dictionary
+            if column_type == ColumnType.NUMERICAL:
+                numerical_data[closest_column_name] = description
+            elif column_type == ColumnType.CATEGORICAL:
+                categorical_data[closest_column_name] = description
+            elif column_type == ColumnType.DESCRIPTIVE:
+                descriptive_data[closest_column_name] = description
+            elif column_type == ColumnType.IDENTIFIER:
+                identifier_data[closest_column_name] = description
+            else:
+                raise ValueError(f"Invalid column type '{column_type}' for column '{closest_column_name}'")
+            
+        else:
+            # Add the column to the corresponding dictionary
+            numerical_data[column_name] = description
+
+    for column_name, description in summarized_input_dict.get("qualitative_data", {}).items():
+        if column_name not in column_descriptions_dictionary:
+            closest_column_name, column_type = vectordb.get_closest_column_from_description(
+                approximate_column_name=column_name,
+                users_description=description,
+                sample_data_strings=[],
+            )
+
+            if closest_column_name not in column_descriptions_dictionary:
+                raise ValueError(f"Closest column name '{closest_column_name}' not found in chroma columns collection.")
+            
+            if column_type == ColumnType.NUMERICAL:
+                numerical_data[closest_column_name] = description
+            elif column_type == ColumnType.CATEGORICAL:
+                categorical_data[closest_column_name] = description
+            elif column_type == ColumnType.DESCRIPTIVE:
+                descriptive_data[closest_column_name] = description
+            elif column_type == ColumnType.IDENTIFIER:
+                identifier_data[closest_column_name] = description
+            else:
+                raise ValueError(f"Invalid column type '{column_type}' for column '{closest_column_name}'")
+
+        else:
+            # Add the column to the corresponding dictionary
+            categorical_data[column_name] = description
+
     summarized_input = SummarizedInput(
         summary=summarized_input_intent["summary"],
-        numerical_data=summarized_input_dict.get("numerical_data", {}),
-        categorical_data=summarized_input_dict.get("categorical_data", {}),
-        descriptive_data=summarized_input_dict.get("descriptive_data", {}),
+        numerical_data=numerical_data,
+        categorical_data=categorical_data,
+        descriptive_data=descriptive_data,
+        identifier_data=identifier_data,
         user_requested_columns=summarized_input_dict.get("user_requested_columns", []),
         user_intent=summarized_input_intent["user_intent"],
     )
