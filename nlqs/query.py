@@ -3,16 +3,27 @@ import logging
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Union
 
+from attr import In, validate
 import chromadb
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI, OpenAI
+from typing import TypedDict
+
+from utils.json_outputs import validate_llm_output_keys
 
 # Create a logger object
 logger = logging.getLogger(__name__)
 
 # Set the logging level (e.g., DEBUG, INFO, WARNING, ERROR)
 logger.setLevel(logging.INFO)
+
+
+class InputIntent(TypedDict):
+    summary: str
+    user_intent: str
+    qualitative_statements: List[str]
+    quantitative_statements: List[str]
 
 
 @dataclass
@@ -25,6 +36,22 @@ class SummarizedInput:
     descriptive_data: Dict[str, str]
     user_requested_columns: List[str]
     user_intent: str
+
+
+REFERENCE_SUMMARIZED_INTENT_DICT = {
+    "summary": "",
+    "user_intent": "",
+    "qualitative_statements": [],
+    "quantitative_statements": [],
+}
+
+
+REFERENCE_SUMMARIZED_OUTPUT_DICT = {
+    "numerical_data": {},
+    "categorical_data": {},
+    "descriptive_data": {},
+    "user_requested_columns": [],
+}
 
 
 # Default system prompt for the LLM.
@@ -92,6 +119,101 @@ def summarize(
         }
     """
 
+    # Updated NLQS Algorithm:
+    # 1. Extract a list of qualitative and quantitative statements from the user input along with the user intent.
+    # 2. Identify the relevant columns from the data based on the statements extracted and available column descriptions.
+    # 3. Generate a structured output in JSON format with the summary, numerical data, categorical data, descriptive data, 
+    # user requested columns, and user intent.
+    intent_classification_prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                f"""
+                You will receive a user input and the chat history. Your task is to:
+                
+                1. **Single-Word Queries**: If the user input is a single word or very short (e.g., one or two words), provide a direct response if possible. If the query is unclear, prompt the user to elaborate.
+                - Example response: "It seems you're asking about something specific. Could you provide more details?"
+
+                2. **Structured Analysis**: For all other inputs, analyze the user input and identify key details based on our available data and chat history.
+                
+                3. Summarize the input, classifying the statements made by the user into qualitative and quantitative categories.
+                
+                4. Identify relevant columns from which we can provide an answer. Pay close attention to the user's intent and specific mentions of data columns:
+                - Are they seeking information about products, medications, treatments, or other relevant categories?
+                - If the user is seeking information about a product, also provide the URL of the product if available.
+                - Look for explicit mentions of column names, synonyms, or phrases that indicate the type of information requested. If the user specifies certain attributes or metrics, consider these as user-requested columns.
+
+                5. Classify the user's intent. Possible intents include: phatic_communication, sql_injection, profanity, and other.
+
+                6. Output the result in a JSON format.
+
+                7. Do not output any other information except the JSON. Do not add [OUT], [/OUT] to the output.(!important)
+                
+                The output JSON should have the following structure:
+                `
+                    "summary": "summary of the user input",
+                    "qualitative_statements":
+                                        [
+                                            "statement 1",
+                                            "statement 2",
+                                            "statement 3"
+                                        ],
+                    "qualitative_statements":
+                                        [
+                                            "statement 1",
+                                            "statement 2",
+                                            "statement 3"
+                                        ],                    
+                    "user_intent": "The user's intent. If none, leave it as an empty string.",
+                `
+                
+                chat history: {chat_history}
+
+                Now, summarize the user input, chat history and provide the structured output in JSON format.
+                """,
+            ),
+            ("human", f"{user_input}"),
+        ]
+    )
+
+
+    output_parser = StrOutputParser()
+    chain = intent_classification_prompt | llm | output_parser
+
+    summarized_input_intent = str(chain.invoke({"user_input": user_input}))
+
+    try:
+        # Attempt to parse the summarized input as JSON
+        summarized_input_dict = json.loads(summarized_input_intent)
+
+        missing_keys = validate_llm_output_keys(
+            llm_output=summarized_input_dict, 
+            reference_dict=REFERENCE_SUMMARIZED_INTENT_DICT
+            )
+
+        if len(missing_keys) > 0:
+            logger.error(f"Missing keys in summarized_input_dict: {missing_keys}")
+            raise ValueError("Missing keys in summarized_input_dict")
+        else:
+            # Insert into typed dict for summarized intent
+            summarized_input_intent = InputIntent(
+                summary=summarized_input_dict["summary"],
+                user_intent=summarized_input_dict["user_intent"],
+                qualitative_statements=summarized_input_dict["qualitative_statements"],
+                quantitative_statements=summarized_input_dict["quantitative_statements"],
+            )
+
+    except json.JSONDecodeError:
+        # If parsing fails, return an empty SummarizedInput
+        logger.error(f"Error parsing summarized_input_intent for user input: {user_input}")
+        summarized_input_intent = InputIntent(
+            summary="",
+            user_intent="", 
+            qualitative_statements=[], 
+            quantitative_statements=[]
+        )
+    
+
     column_descriptions = list(column_descriptions_dictionary.items())
 
     prompt = ChatPromptTemplate.from_messages(
@@ -99,7 +221,7 @@ def summarize(
             (
                 "system",
                 f"""
-                You will receive a user input and the chat history. Your task is to:
+                You will receive a user input and the chat history, and the set of qualitative and quantitative statements within the input. Your task is to:
                 
                 1. **Single-Word Queries**: If the user input is a single word or very short (e.g., one or two words), provide a direct response if possible. If the query is unclear, prompt the user to elaborate.
                 - Example response: "It seems you're asking about something specific. Could you provide more details?"
@@ -121,7 +243,6 @@ def summarize(
                 
                 The output JSON should have the following structure:
                 `
-                    "summary": "summary of the user input",
                     "numerical_data":
                                         ` 
                                         "column name": "Data mentioned about that column by the user. Example- < 4",
@@ -141,11 +262,12 @@ def summarize(
                                         "column name": "Data mentioned about that column by the user",
                                         `,
                     "user_requested_columns": "List of columns the user wants data from. If none, leave it as an empty list. Always add product and url to this column.",
-                    "user_intent": "The user's intent. If none, leave it as an empty string.",
                 `
                 
                 The data we have and chat history:
                 Data:{column_descriptions}\n\n 
+                Qualitative statements: {summarized_input_intent['qualitative_statements']}\n\n
+                Quantitative statements: {summarized_input_intent['quantitative_statements']}\n\n
                 numerical columns in the data: {numerical_columns}\n\n 
                 categorical columns in the data: {categorical_columns}\n\n
                 descriptive columns in the data: {descriptive_columns}\n\n 
@@ -164,13 +286,23 @@ def summarize(
 
     summarized_input_str = str(chain.invoke({"user_input": user_input}))
 
-    print(f"summarized_input_str: {summarized_input_str}")
+    print(f"summarized_input_intent: {summarized_input_str}")
 
     print("------------------------------------------------------------------------")
 
     try:
         # Attempt to parse the summarized input as JSON
         summarized_input_dict = json.loads(summarized_input_str)
+        
+        missing_keys = validate_llm_output_keys(
+            llm_output=summarized_input_dict, 
+            reference_dict=REFERENCE_SUMMARIZED_OUTPUT_DICT
+        )
+
+        if len(missing_keys) > 0:
+            logger.error(f"Missing keys in summarized_input_dict: {missing_keys}")
+            raise ValueError("Missing keys in summarized_input_dict")
+
     except json.JSONDecodeError:
         # If parsing fails, return an empty SummarizedInput
         summarized_input_dict = {}
@@ -180,18 +312,18 @@ def summarize(
     logger.info(f"Summarized input: {summarized_input_dict}")
 
     summarized_input = SummarizedInput(
-        summary=summarized_input_dict.get("summary", ""),
+        summary=summarized_input_intent["summary"],
         numerical_data=summarized_input_dict.get("numerical_data", {}),
         categorical_data=summarized_input_dict.get("categorical_data", {}),
         descriptive_data=summarized_input_dict.get("descriptive_data", {}),
         user_requested_columns=summarized_input_dict.get("user_requested_columns", []),
-        user_intent=summarized_input_dict.get("user_intent", ""),
+        user_intent=summarized_input_intent["user_intent"],
     )
 
     return summarized_input
 
 
-def generate_quantitaive_serach_query(quantitaive_data: Dict[str, str], table_name: str, primary_key: str) -> str:
+def generate_quantitaive_search_query(quantitaive_data: Dict[str, str], table_name: str, primary_key: str) -> str:
     """Creates an SQL query from a dictionary of quantitative data.
 
     Args:

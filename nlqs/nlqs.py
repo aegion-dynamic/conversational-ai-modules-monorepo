@@ -12,7 +12,7 @@ from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
 from nlqs.description_generator import get_chroma_collection
 from nlqs.parameters import OPENAI_API_KEY
-from nlqs.query import generate_quantitaive_serach_query, qualitative_search, summarize
+from nlqs.query import generate_quantitaive_search_query, qualitative_search, summarize
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -188,7 +188,7 @@ class NLQS:
                 # TODO: use descriptive data...
                 descriptive_data = summarized_input.descriptive_data
 
-                quantitaive_query = generate_quantitaive_serach_query(numerical_data, self.table_name, primary_key)
+                quantitaive_query = generate_quantitaive_search_query(numerical_data, self.table_name, primary_key)
                 quantitative_ids_uncleaned = driver.execute_query(quantitaive_query)
 
                 quantitative_ids = []
