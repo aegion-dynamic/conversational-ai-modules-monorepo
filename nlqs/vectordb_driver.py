@@ -31,6 +31,7 @@ from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Tuple, TypedDict, Union
 import chromadb
+from chromadb.config import Settings
 from pandas import DataFrame
 
 from nlqs.database.postgres import PostgresDriver
@@ -88,7 +89,13 @@ class VectorDBDriver:
         if chroma_type:
             self.chroma_client = chromadb.PersistentClient(path=str(chroma_config.persist_path))
         else:
-            self.chroma_client = chromadb.HttpClient(port=chroma_config.port, host=chroma_config.host)
+            self.chroma_client = chromadb.HttpClient(
+                port=chroma_config.port, 
+                host=chroma_config.host, 
+                settings=Settings(
+                chroma_client_auth_provider="chromadb.auth.basic.BasicAuthClientProvider",
+                chroma_client_auth_credentials=f"{chroma_config.username}:{chroma_config.password}",
+            ),)
 
 
     def check_nlqs_collections_exists(
