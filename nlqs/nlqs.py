@@ -123,11 +123,9 @@ class NLQS:
         primary_key = driver.get_primary_key(self.table_name)
 
         # Chroma Collection
-        chroma_collections = self.vectordb_driver.get_chroma_collection(
-            collection_name=self.chroma_config.collection_name,
-        )
+        chroma_data_collection = self.vectordb_driver.dataset_collection
 
-        if chroma_collections is None:
+        if chroma_data_collection is None:
             raise ValueError("Chroma Collection not found in vectordb. Please create a collection.")
 
         # Step 5
@@ -196,7 +194,7 @@ class NLQS:
                     quantitative_ids = [item[0] for item in quantitative_ids_uncleaned]
                     print(f"quantitative_ids: {quantitative_ids}")
 
-                qualitative_ids = qualitative_search(chroma_collections, categorical_data, primary_key)
+                qualitative_ids = qualitative_search(chroma_data_collection, categorical_data, primary_key)
                 print(f"qualitative_ids: {qualitative_ids}")
 
                 # Find the intersection of quantitative_ids and qualitative_ids

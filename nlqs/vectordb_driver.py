@@ -1,16 +1,45 @@
+"""
+VectorDB Data Schema
 
+Column Info Collection (name: nlqs_column_info)
+{
+    "document": "description : This column contains the description of the product. It is a text field and can be used for exact or partial matches.",
+    "embedding": [0.1, 0.2, 0.3, 0.4, ... , 0.5],
+    "metadata": {
+        "db_name": "Location of the original database",
+        "table_name": "Location of the original table",
+        "column_name": "Column name",
+        "column_type": "descriptive"
+    }
+}
 
+Dataset Collection (name: nlqs_descriptive_data)
+{
+    "document": "Raw data from the dataset",
+    "embedding": [0.1, 0.2, 0.3, 0.4, ... , 0.5],
+    "metadata": {
+        "db_name": "Location of the original database",
+        "table_name": "Location of the original table",
+        "column_name": "Column name",
+    }
+}
+
+"""
+from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
-from logging.config import IDENTIFIER
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
-from unittest.mock import DEFAULT
+from typing import List, Optional, Tuple, TypedDict, Union
 import chromadb
+from pandas import DataFrame
+
+from nlqs.database.postgres import PostgresDriver
+from nlqs.database.sqlite import SQLiteDriver
 
 
 DEFAULT_COLUMN_INFO_COLLECTION_NAME = "nlqs_column_info"
-DEFAULT_DATASET_COLLECTION_NAME = "nlqs_dataset"
+DEFAULT_DATASET_COLLECTION_NAME = "nlqs_descriptive_data"
+
 
 class ColumnType(Enum):
     NUMERICAL = "numerical"
@@ -19,16 +48,33 @@ class ColumnType(Enum):
     IDENTIFIER = "identifier"
 
 
+class DataCollectionMetadata(TypedDict):
+    db_name: str
+    table_name: str
+    column_name: str
+
+
+class ColumnInfoMetadata(TypedDict):
+    db_name: str
+    table_name: str
+    column_name: str
+    column_type: ColumnType
+
+
 @dataclass
 class ChromaDBConfig:
-    collection_name: str
+    column_info_collection_name: str = DEFAULT_COLUMN_INFO_COLLECTION_NAME
+    dataset_collection_name: str = DEFAULT_DATASET_COLLECTION_NAME
     persist_path: Path = Path("./chroma")
     host: str = "localhost"
     port: int = 8000
     is_local: bool = True
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 
 class VectorDBDriver:
+
 
     def __init__(self, chroma_config: ChromaDBConfig):
         """ Constructor for the VectorDBDriver
@@ -94,6 +140,32 @@ class VectorDBDriver:
         
         return chroma_collection
 
+    @property
+    def column_info_collection(self) -> chromadb.Collection:
+        """ Get the column info collection.
+
+        Returns:
+            chromadb.Collection: Column info collection
+        """
+
+        collection = self.get_chroma_collection(self.chroma_config.column_info_collection_name)
+        if collection is None:
+            raise ValueError(f"Error: Collection '{self.chroma_config.column_info_collection_name}' does not exist.")
+        return collection
+    
+    @property
+    def dataset_collection(self) -> chromadb.Collection:
+        """ Get the dataset collection.
+
+        Returns:
+            chromadb.Collection: Dataset collection
+        """
+
+        collection = self.get_chroma_collection(self.chroma_config.dataset_collection_name)
+        if collection is None:
+            raise ValueError(f"Error: Collection '{self.chroma_config.dataset_collection_name}' does not exist.")
+        return collection
+
 
     def get_closest_column_from_description(
             self, 
@@ -116,10 +188,32 @@ class VectorDBDriver:
         # combination of the user's description and sample data strings
         # Step 2: Replace the approximate column name with the closest column name
 
+        # Step 1: Lookup and get the closest column name from the collection using a 
+        # combination of the user's description and sample data strings
+        column_info_collection = self.get_chroma_collection(DEFAULT_COLUMN_INFO_COLLECTION_NAME)
+        if not column_info_collection:
+            raise ValueError("Column info collection does not exist.")
 
+        # Create a description package
+        description_package = f"""
+        Closest Column Name: {approximate_column_name}
+        User's Description: {users_description}
+        Sample Data: {', '.join(sample_data_strings)}
+        """
 
-        raise NotImplementedError("This method is not implemented yet.")
+        # TODO: Figure out which embedding to use
+
+        # Use the formatted string to find the closest column
+        results = column_info_collection.query(query_texts=[description_package], n_results=1)
+
+        if not results:
+            raise ValueError("No matching column found.")
+
+        closest_column_name = results['metadatas'][0]['column_name']
+
+        return closest_column_name, self.get_column_type(closest_column_name)
     
+
     def get_column_type(self, column_name: str) -> ColumnType:
         """ Get the column type for the given column name.
 
@@ -132,43 +226,74 @@ class VectorDBDriver:
 
         raise NotImplementedError("This method is not implemented yet.")
 
-    # collection = client.create_collection(collection_name)
 
-    # data = db_driver.fetch_data_from_database(db_driver.db_config.dataset_table_name)
+    def store_column_info_in_db(
+        self,
+        column_name: str,
+        description: str,
+        column_type: ColumnType,
+    ) -> None:
+        """ Store the column information in the database.
 
-    # categorical_columns = data.select_dtypes(include=["object"]).columns.tolist()
+        Args:
+            column_name (str): Column name
+            description (str): Column description
+            column_type (ColumnType): Column type
+        """
 
-    # if data is None:
-    #     raise ValueError("No data found in the database.")
+        raise NotImplementedError("This method is not implemented yet.")
 
-    # if not primary_key:
-    #     primary_key = data.columns[0]
 
-    # for index, row in data.iterrows():
-    #     # Extract the primary key value
-    #     pri_key = str(row[primary_key])
+    @staticmethod
+    def initialize_nlqs_vectordb(
+        chroma_config: ChromaDBConfig,
+    ) -> None:
+        """ Initialize the NLQS VectorDB collections.
 
-    #     for column in categorical_columns:
-    #         # Extract the text for the current column and row
-    #         text = [str(row[column])]
+        Args:
+            chroma_config (ChromaDBConfig): ChromaDB configuration
+            column_info_collection_name (str): Column info collection name
+            dataset_collection_name (str): Dataset collection name
+        """
 
-    #         # Create the ID for the current column and row
-    #         id = f"{column}_{pri_key}"
+        # Create a new driver instance
+        driver = VectorDBDriver(chroma_config)
 
-    #         print(f"id: {id}")
+        # Create the NLQS collections
+        driver.chroma_client.create_collection(chroma_config.column_info_collection_name)
+        driver.chroma_client.create_collection(chroma_config.dataset_collection_name)
 
-    #         # Create the metadata dictionary
-    #         meta = {
-    #             "id": pri_key,
-    #             "table_name": db_driver.db_config.dataset_table_name,
-    #             "column_name": column,
-    #         }
+    
+    @staticmethod
+    def populate_nlqs_vectordb(
+        chroma_config: ChromaDBConfig,
+        column_info: Optional[DataFrame] = None,
+        dataset_info: Optional[DataFrame] = None,
+    ) -> None:
+        """ Populate the NLQS VectorDB collections
 
-    #         # Add the data to the Chroma collection
-    #         chroma_collection = collection.add(
-    #             documents=text,
-    #             ids=id,
-    #             metadatas=meta,
-    #         )
+        Args:
+            chroma_config (ChromaDBConfig): ChromaDB configuration
+            column_info (DataFrame): Column information
+            dataset_info (DataFrame): Dataset information
+        """
 
-    # chroma_collection = client.get_collection(collection_name)
+        vectordb_driver = VectorDBDriver(chroma_config)
+
+        if column_info is not None:
+            # Populate the column info collection
+            vectordb_driver.column_info_collection.add(
+                ids=[str(i+1) for i in range(len(column_info))],
+                documents=[],
+                embeddings=[],
+                metadatas=[],
+            )
+        
+        if dataset_info is not None:
+            # Populate the dataset collection
+            pass
+
+
+        raise NotImplementedError("This method is not implemented yet.")
+
+
