@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import Dict, List, Tuple
 
 import pandas as pd
 
@@ -21,7 +21,7 @@ class AbstractDriver(ABC):
         raise NotImplementedError("This method must be implemented by the subclass")
 
     @abstractmethod
-    def retrieve_descriptions_and_types_from_db(self):
+    def retrieve_descriptions_and_types_from_db(self) -> Tuple[Dict[str, str], List[str], List[str], List[str]]:
         raise NotImplementedError("This method must be implemented by the subclass")
 
     @abstractmethod
@@ -38,4 +38,8 @@ class AbstractDriver(ABC):
 
     @abstractmethod
     def get_primary_key(self, table_name: str) -> str:
+        raise NotImplementedError("This method must be implemented by the subclass")
+
+    @abstractmethod
+    def validate_db_schema(self) -> bool:
         raise NotImplementedError("This method must be implemented by the subclass")
