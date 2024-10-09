@@ -7,6 +7,7 @@ import pytest
 
 from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
+from nlqs.vectordb_driver import ChromaDBConfig, VectorDBDriver
 
 
 @pytest.fixture
@@ -132,3 +133,19 @@ def mock_connection():
 def patch_psycopg2_connect(mock_connection):
     with patch("psycopg2.connect", return_value=mock_connection) as mock:
         yield mock
+
+
+@pytest.fixture
+def chroma_config():
+    return ChromaDBConfig(
+        column_info_collection_name="test_column_info",
+        dataset_collection_name="test_dataset_info",
+        persist_path=Path("./test_chroma"),
+        host="localhost",
+        port=8000,
+        is_local=True,
+    )
+
+@pytest.fixture
+def vectordb_driver(chroma_config):
+    return VectorDBDriver(chroma_config)

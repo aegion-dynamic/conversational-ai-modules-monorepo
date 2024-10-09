@@ -21,25 +21,35 @@ Dataset Collection (name: nlqs_descriptive_data)
         "db_name": "Location of the original database",
         "table_name": "Location of the original table",
         "column_name": "Column name",
+        "lookup_key_column_name": "Primary key column name",
+        "lookup_key_column_value": "Primary key column value
     }
 }
 
+Table Descriptions Collection (name: nlqs_table_descriptions)
+{
+    "document": "Description of the table",
+    "embedding": [0.1, 0.2, 0.3, 0.4, ... , 0.5],
+    "metadata": {
+        "db_name": "Location of the original database",
+        "table_name": "Location of the original table",
+    }
+}
 """
+
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Tuple, TypedDict, Union
+from typing import List, Mapping, Optional, Tuple, TypedDict
 import chromadb
 from chromadb.config import Settings
 from pandas import DataFrame
 
-from nlqs.database.postgres import PostgresDriver
-from nlqs.database.sqlite import SQLiteDriver
-
 
 DEFAULT_COLUMN_INFO_COLLECTION_NAME = "nlqs_column_info"
 DEFAULT_DATASET_COLLECTION_NAME = "nlqs_descriptive_data"
+DEFAULT_TABLE_DESCRIPTION_COLLECTION_NAME = "nlqs_table_descriptions"
 
 
 class ColumnType(Enum):
@@ -62,8 +72,14 @@ class ColumnInfoMetadata(TypedDict):
     column_type: ColumnType
 
 
+class TableDescriptionMetadata(TypedDict):
+    db_name: str
+    table_name: str
+
+
 @dataclass
 class ChromaDBConfig:
+    table_description_collection_name: str = DEFAULT_TABLE_DESCRIPTION_COLLECTION_NAME
     column_info_collection_name: str = DEFAULT_COLUMN_INFO_COLLECTION_NAME
     dataset_collection_name: str = DEFAULT_DATASET_COLLECTION_NAME
     persist_path: Path = Path("./chroma")
@@ -197,7 +213,7 @@ class VectorDBDriver:
 
         # Step 1: Lookup and get the closest column name from the collection using a 
         # combination of the user's description and sample data strings
-        column_info_collection = self.get_chroma_collection(DEFAULT_COLUMN_INFO_COLLECTION_NAME)
+        column_info_collection = self.column_info_collection
         if not column_info_collection:
             raise ValueError("Column info collection does not exist.")
 
@@ -214,9 +230,17 @@ class VectorDBDriver:
         results = column_info_collection.query(query_texts=[description_package], n_results=1)
 
         if not results:
-            raise ValueError("No matching column found.")
+            raise ValueError(f"No matching column found for {approximate_column_name}.")
 
-        closest_column_name = results['metadatas'][0]['column_name']
+        metadatas: List[List[Mapping[str, str | int | float | bool]]] | None = results['metadatas']
+        if not metadatas:
+            raise ValueError(f"No metadata found in chromadb query result for {approximate_column_name}.")
+        
+        # TODO: Figure out if this is the correct way to get the closest column name
+        closest_column_name = metadatas[0][0]["column_name"]
+
+        if type(closest_column_name) is not str:
+            raise ValueError(f"Closest column name is not a string for {approximate_column_name}. Extracted Info: {closest_column_name}.")
 
         return closest_column_name, self.get_column_type(closest_column_name)
     
