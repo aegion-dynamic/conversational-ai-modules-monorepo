@@ -20,7 +20,6 @@ Dataset Collection (name: nlqs_descriptive_data)
     "metadata": {
         "db_name": "Location of the original database",
         "table_name": "Location of the original table",
-        "column_name": "Column name",
         "lookup_key_column_name": "Primary key column name",
         "lookup_key_column_value": "Primary key column value
     }
@@ -41,16 +40,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import List, Mapping, Optional, Tuple, TypedDict
+from typing import Callable, List, Mapping, Optional, Tuple, TypedDict
 import chromadb
 from chromadb.config import Settings
 from pandas import DataFrame
+from tqdm import tqdm
 
 
 DEFAULT_COLUMN_INFO_COLLECTION_NAME = "nlqs_column_info"
 DEFAULT_DATASET_COLLECTION_NAME = "nlqs_descriptive_data"
 DEFAULT_TABLE_DESCRIPTION_COLLECTION_NAME = "nlqs_table_descriptions"
 
+DEFAULT_BATCH_SIZE = 10
 
 class ColumnType(Enum):
     NUMERICAL = "numerical"
@@ -62,7 +63,8 @@ class ColumnType(Enum):
 class DataCollectionMetadata(TypedDict):
     db_name: str
     table_name: str
-    column_name: str
+    lookup_key_column_name: str
+    lookup_key_column_value: str
 
 
 class ColumnInfoMetadata(TypedDict):
@@ -300,6 +302,9 @@ class VectorDBDriver:
         chroma_config: ChromaDBConfig,
         column_info: Optional[DataFrame] = None,
         dataset_info: Optional[DataFrame] = None,
+        table_info: Optional[DataFrame] = None,
+        batch_size:int = DEFAULT_BATCH_SIZE,
+        
     ) -> None:
         """ Populate the NLQS VectorDB collections
 
@@ -312,17 +317,98 @@ class VectorDBDriver:
         vectordb_driver = VectorDBDriver(chroma_config)
 
         if column_info is not None:
-            # Populate the column info collection
-            vectordb_driver.column_info_collection.add(
-                ids=[str(i+1) for i in range(len(column_info))],
-                documents=[],
-                embeddings=[],
-                metadatas=[],
-            )
+
+            # Ids of the rows
+            ids = [str(i+1) for i in range(len(column_info))]
+
+            for index in tqdm(range(0, len(column_info), batch_size)):
+
+
+                descriptions = column_info["description"].astype(str).tolist()[index:index+batch_size]
+                db_names = column_info["db_name"].astype(str).tolist()[index:index+batch_size]
+                table_names = column_info["table_name"].astype(str).tolist()[index:index+batch_size]
+                column_names = column_info["column_name"].astype(str).tolist()[index:index+batch_size]
+                column_types = column_info["column_type"].astype(str).tolist()[index:index+batch_size]
+                embeddings = column_info["embedding"].tolist()[index:index+batch_size]
+
+                # Create metadata objects
+                metadatas = []
+                for i in range(len(descriptions)):
+                    metadatas.append({
+                        "db_name": db_names[i],
+                        "table_name": table_names[i],
+                        "column_name": column_names[i],
+                        "column_type": column_types[i]
+                    })
+                
+                # Populate the column info collection
+                vectordb_driver.column_info_collection.add(
+                    ids=ids[index:index+batch_size],
+                    documents=descriptions,
+                    embeddings=embeddings,
+                    metadatas=metadatas,
+                )
+
         
         if dataset_info is not None:
             # Populate the dataset collection
-            pass
+            ids = [str(i+1) for i in range(len(dataset_info))]
+
+            for index in tqdm(range(0, len(dataset_info), batch_size)):
+
+                documents = dataset_info["description"].astype(str).tolist()[index:index+batch_size]
+                db_names = dataset_info["db_name"].astype(str).tolist()[index:index+batch_size]
+                table_names = dataset_info["table_name"].astype(str).tolist()[index:index+batch_size]
+                column_names = dataset_info["column_name"].astype(str).tolist()[index:index+batch_size]
+                lookup_key_column_names = dataset_info["lookup_key_column_name"].astype(str).tolist()[index:index+batch_size]
+                lookup_key_column_values = dataset_info["lookup_key_column_value"].astype(str).tolist()[index:index+batch_size]
+                embeddings = dataset_info["embedding"].tolist()[index:index+batch_size]
+
+                # Create metadata objects
+                metadatas = []
+                for i in range(len(documents)):
+                    metadatas.append({
+                        "db_name": db_names[i],
+                        "table_name": table_names[i],
+                        "column_name": column_names[i],
+                        "lookup_key_column_name": lookup_key_column_names[i],
+                        "lookup_key_column_value": lookup_key_column_values[i]
+                    })
+                
+                # Populate the dataset collection
+                vectordb_driver.dataset_collection.add(
+                    ids=ids[index:index+batch_size],
+                    documents=documents,
+                    embeddings=embeddings,
+                    metadatas=metadatas,
+                )
+
+
+        if table_info is not None:
+            # Populate the table description collection
+            ids = [str(i+1) for i in range(len(table_info))]
+
+            for index in tqdm(range(0, len(table_info), batch_size)):
+                documents = table_info["description"].astype(str).tolist()[index:index+batch_size]
+                db_names = table_info["db_name"].astype(str).tolist()[index:index+batch_size]
+                table_names = table_info["table_name"].astype(str).tolist()[index:index+batch_size]
+                embeddings = table_info["embedding"].tolist()[index:index+batch_size]
+
+                # Create metadata objects
+                metadatas = []
+                for i in range(len(documents)):
+                    metadatas.append({
+                        "db_name": db_names[i],
+                        "table_name": table_names[i]
+                    })
+                
+                # Populate the table description collection
+                vectordb_driver.get_chroma_collection(chroma_config.table_description_collection_name).add(
+                    ids=ids[index:index+batch_size],
+                    documents=documents,
+                    embeddings=embeddings,
+                    metadatas=metadatas,
+                )
 
 
         raise NotImplementedError("This method is not implemented yet.")
