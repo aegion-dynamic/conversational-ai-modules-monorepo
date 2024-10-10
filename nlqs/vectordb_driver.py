@@ -191,6 +191,18 @@ class VectorDBDriver:
             raise ValueError(f"Error: Collection '{self.chroma_config.dataset_collection_name}' does not exist.")
         return collection
 
+    @property
+    def table_description_collection(self) -> chromadb.Collection:
+        """ Get the table description collection.
+
+        Returns:
+            chromadb.Collection: Table description collection
+        """
+
+        collection = self.get_chroma_collection(self.chroma_config.table_description_collection_name)
+        if collection is None:
+            raise ValueError(f"Error: Collection '{self.chroma_config.table_description_collection_name}' does not exist.")
+        return collection
 
     def get_closest_column_from_description(
             self, 
@@ -293,10 +305,42 @@ class VectorDBDriver:
         driver = VectorDBDriver(chroma_config)
 
         # Create the NLQS collections
-        driver.chroma_client.create_collection(chroma_config.column_info_collection_name)
-        driver.chroma_client.create_collection(chroma_config.dataset_collection_name)
+        try:
+            driver.chroma_client.create_collection(chroma_config.column_info_collection_name)
+        except Exception as e:
+            print(f"Error creating NLQS collections: {e}")
 
-    
+        try:
+            driver.chroma_client.create_collection(chroma_config.dataset_collection_name)
+        except Exception as e:
+            print(f"Error creating NLQS collections: {e}")
+
+        try:
+            driver.chroma_client.create_collection(chroma_config.table_description_collection_name)
+        except Exception as e:
+            print(f"Error creating NLQS collections: {e}")
+
+
+    @staticmethod
+    def purge_nlqs_vectordb(
+        chroma_config: ChromaDBConfig,
+    ) -> None:
+        """ Purge the NLQS VectorDB collections
+
+        Args:
+            chroma_config (ChromaDBConfig): ChromaDB configuration
+        """
+
+        driver = VectorDBDriver(chroma_config)
+
+        try:
+            driver.chroma_client.delete_collection(chroma_config.column_info_collection_name)
+            driver.chroma_client.delete_collection(chroma_config.dataset_collection_name)
+            driver.chroma_client.delete_collection(chroma_config.table_description_collection_name)
+        except Exception as e:
+            print(f"Error purging NLQS collections: {e}")
+
+
     @staticmethod
     def populate_nlqs_vectordb(
         chroma_config: ChromaDBConfig,
@@ -317,6 +361,8 @@ class VectorDBDriver:
         vectordb_driver = VectorDBDriver(chroma_config)
 
         if column_info is not None:
+
+            print("Populating the column info collection...")
 
             # Ids of the rows
             ids = [str(i+1) for i in range(len(column_info))]
@@ -351,6 +397,9 @@ class VectorDBDriver:
 
         
         if dataset_info is not None:
+
+            print("Populating the dataset collection...")
+
             # Populate the dataset collection
             ids = [str(i+1) for i in range(len(dataset_info))]
 
@@ -359,7 +408,6 @@ class VectorDBDriver:
                 documents = dataset_info["description"].astype(str).tolist()[index:index+batch_size]
                 db_names = dataset_info["db_name"].astype(str).tolist()[index:index+batch_size]
                 table_names = dataset_info["table_name"].astype(str).tolist()[index:index+batch_size]
-                column_names = dataset_info["column_name"].astype(str).tolist()[index:index+batch_size]
                 lookup_key_column_names = dataset_info["lookup_key_column_name"].astype(str).tolist()[index:index+batch_size]
                 lookup_key_column_values = dataset_info["lookup_key_column_value"].astype(str).tolist()[index:index+batch_size]
                 embeddings = dataset_info["embedding"].tolist()[index:index+batch_size]
@@ -370,7 +418,6 @@ class VectorDBDriver:
                     metadatas.append({
                         "db_name": db_names[i],
                         "table_name": table_names[i],
-                        "column_name": column_names[i],
                         "lookup_key_column_name": lookup_key_column_names[i],
                         "lookup_key_column_value": lookup_key_column_values[i]
                     })
@@ -385,6 +432,9 @@ class VectorDBDriver:
 
 
         if table_info is not None:
+
+            print("Populating the table description collection...")
+
             # Populate the table description collection
             ids = [str(i+1) for i in range(len(table_info))]
 
@@ -403,7 +453,7 @@ class VectorDBDriver:
                     })
                 
                 # Populate the table description collection
-                vectordb_driver.get_chroma_collection(chroma_config.table_description_collection_name).add(
+                vectordb_driver.table_description_collection.add(
                     ids=ids[index:index+batch_size],
                     documents=documents,
                     embeddings=embeddings,
@@ -411,6 +461,5 @@ class VectorDBDriver:
                 )
 
 
-        raise NotImplementedError("This method is not implemented yet.")
 
 

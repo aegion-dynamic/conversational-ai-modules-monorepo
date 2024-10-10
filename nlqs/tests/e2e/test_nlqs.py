@@ -13,7 +13,7 @@ def test_nlsq_api():
             dataset_table_name="new_dataset",
             uri_column="URL",
         ), 
-        chroma_config=ChromaDBConfig(collection_name="aegion")
+        chroma_config=ChromaDBConfig()
     )
 
     user_input = "Tell me about cannabis plants and the differnt kinds of them"
