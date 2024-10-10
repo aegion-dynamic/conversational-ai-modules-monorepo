@@ -119,7 +119,7 @@ if __name__ == "__main__":
     connection_driver.connect()
 
     # ChromaDB configuration
-    chroma_config = ChromaDBConfig(collection_name=CHROMA_COLLECTION_NAME)  # local chroma
+    chroma_config = ChromaDBConfig()  # local chroma
 
     # remote config
     chroma_config = ChromaDBConfig(CHROMA_COLLECTION_NAME, is_local=False, host="localhost", port=8000)
