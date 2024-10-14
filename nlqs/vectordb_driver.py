@@ -37,21 +37,24 @@ Table Descriptions Collection (name: nlqs_table_descriptions)
 """
 
 from __future__ import annotations
+
+from curses import meta
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Callable, List, Mapping, Optional, Tuple, TypedDict
+from typing import Callable, List, Mapping, Optional, Tuple, TypedDict, Union
+
 import chromadb
 from chromadb.config import Settings
 from pandas import DataFrame
 from tqdm import tqdm
-
 
 DEFAULT_COLUMN_INFO_COLLECTION_NAME = "nlqs_column_info"
 DEFAULT_DATASET_COLLECTION_NAME = "nlqs_descriptive_data"
 DEFAULT_TABLE_DESCRIPTION_COLLECTION_NAME = "nlqs_table_descriptions"
 
 DEFAULT_BATCH_SIZE = 10
+
 
 class ColumnType(Enum):
     NUMERICAL = "numerical"
@@ -79,6 +82,12 @@ class TableDescriptionMetadata(TypedDict):
     table_name: str
 
 
+class ClosestDataResult(TypedDict):
+    lookup_key: str
+    column_value: Union[str, int]
+    data: str
+
+
 @dataclass
 class ChromaDBConfig:
     table_description_collection_name: str = DEFAULT_TABLE_DESCRIPTION_COLLECTION_NAME
@@ -93,10 +102,8 @@ class ChromaDBConfig:
 
 
 class VectorDBDriver:
-
-
     def __init__(self, chroma_config: ChromaDBConfig):
-        """ Constructor for the VectorDBDriver
+        """Constructor for the VectorDBDriver
 
         Args:
             chroma_config (ChromaDBConfig): ChromaDB configuration
@@ -108,20 +115,20 @@ class VectorDBDriver:
             self.chroma_client = chromadb.PersistentClient(path=str(chroma_config.persist_path))
         else:
             self.chroma_client = chromadb.HttpClient(
-                port=chroma_config.port, 
-                host=chroma_config.host, 
+                port=chroma_config.port,
+                host=chroma_config.host,
                 settings=Settings(
-                chroma_client_auth_provider="chromadb.auth.basic.BasicAuthClientProvider",
-                chroma_client_auth_credentials=f"{chroma_config.username}:{chroma_config.password}",
-            ),)
-
+                    chroma_client_auth_provider="chromadb.auth.basic.BasicAuthClientProvider",
+                    chroma_client_auth_credentials=f"{chroma_config.username}:{chroma_config.password}",
+                ),
+            )
 
     def check_nlqs_collections_exists(
         self,
         column_info_collection_name: str = DEFAULT_COLUMN_INFO_COLLECTION_NAME,
         dataset_collection_name: str = DEFAULT_DATASET_COLLECTION_NAME,
     ) -> bool:
-        """ Check if the NLQS collections exist, and return them if they do.
+        """Check if the NLQS collections exist, and return them if they do.
 
         Args:
             custom_column_data_collection_name (str): Custom column data collection name
@@ -130,19 +137,17 @@ class VectorDBDriver:
         Returns:
             Tuple[Optional[chromadb.Collection], Optional[chromadb.Collection]]: Tuple of custom column data collection and custom dataset collection
         """
-        
 
         custom_column_data_collection = self.get_chroma_collection(column_info_collection_name)
         custom_dataset_collection = self.get_chroma_collection(dataset_collection_name)
 
         return (custom_column_data_collection is not None) and (custom_dataset_collection is not None)
 
-
     def get_chroma_collection(
         self,
         collection_name: str,
     ) -> Optional[chromadb.Collection]:
-        """ Return the Chroma collection if it exists, otherwise raises an error.
+        """Return the Chroma collection if it exists, otherwise raises an error.
 
         Args:
             collection_name (str): Collection name
@@ -162,12 +167,12 @@ class VectorDBDriver:
             print(f"Collection '{collection_name}' does not exists")
 
             return None
-        
+
         return chroma_collection
 
     @property
     def column_info_collection(self) -> chromadb.Collection:
-        """ Get the column info collection.
+        """Get the column info collection.
 
         Returns:
             chromadb.Collection: Column info collection
@@ -177,10 +182,10 @@ class VectorDBDriver:
         if collection is None:
             raise ValueError(f"Error: Collection '{self.chroma_config.column_info_collection_name}' does not exist.")
         return collection
-    
+
     @property
     def dataset_collection(self) -> chromadb.Collection:
-        """ Get the dataset collection.
+        """Get the dataset collection.
 
         Returns:
             chromadb.Collection: Dataset collection
@@ -193,7 +198,7 @@ class VectorDBDriver:
 
     @property
     def table_description_collection(self) -> chromadb.Collection:
-        """ Get the table description collection.
+        """Get the table description collection.
 
         Returns:
             chromadb.Collection: Table description collection
@@ -201,16 +206,15 @@ class VectorDBDriver:
 
         collection = self.get_chroma_collection(self.chroma_config.table_description_collection_name)
         if collection is None:
-            raise ValueError(f"Error: Collection '{self.chroma_config.table_description_collection_name}' does not exist.")
+            raise ValueError(
+                f"Error: Collection '{self.chroma_config.table_description_collection_name}' does not exist."
+            )
         return collection
 
     def get_closest_column_from_description(
-            self, 
-            approximate_column_name: str, 
-            users_description: str, 
-            sample_data_strings: List[str]
-        ) -> Tuple[str, ColumnType]:
-        """ Get the closest column name from the description provided by the user.
+        self, approximate_column_name: str, users_description: str, sample_data_strings: List[str]
+    ) -> Tuple[str, ColumnType]:
+        """Get the closest column name from the description provided by the user.
 
         Args:
             approximate_column_name (str): Approximate column name
@@ -221,11 +225,11 @@ class VectorDBDriver:
             str: Closest column name
         """
 
-        # Step 1: Lookup and get the closest column name from the collection using a 
+        # Step 1: Lookup and get the closest column name from the collection using a
         # combination of the user's description and sample data strings
         # Step 2: Replace the approximate column name with the closest column name
 
-        # Step 1: Lookup and get the closest column name from the collection using a 
+        # Step 1: Lookup and get the closest column name from the collection using a
         # combination of the user's description and sample data strings
         column_info_collection = self.column_info_collection
         if not column_info_collection:
@@ -246,21 +250,62 @@ class VectorDBDriver:
         if not results:
             raise ValueError(f"No matching column found for {approximate_column_name}.")
 
-        metadatas: List[List[Mapping[str, str | int | float | bool]]] | None = results['metadatas']
+        metadatas: List[List[Mapping[str, str | int | float | bool]]] | None = results["metadatas"]
         if not metadatas:
             raise ValueError(f"No metadata found in chromadb query result for {approximate_column_name}.")
-        
+
         # TODO: Figure out if this is the correct way to get the closest column name
         closest_column_name = metadatas[0][0]["column_name"]
 
         if type(closest_column_name) is not str:
-            raise ValueError(f"Closest column name is not a string for {approximate_column_name}. Extracted Info: {closest_column_name}.")
+            raise ValueError(
+                f"Closest column name is not a string for {approximate_column_name}. Extracted Info: {closest_column_name}."
+            )
 
         return closest_column_name, self.get_column_type(closest_column_name)
-    
+
+    def get_closest_data_from_description(
+        self,
+        column_name: str,
+        description: str,
+        database_name: str,
+        table_name: str,
+    ) -> List[ClosestDataResult]:
+
+        # Do a chromadb query to get the closest data from the dataset collection
+        # filter by the database name, table names, and column name
+
+        results = self.dataset_collection.query(
+            query_texts=[description],
+            where={
+                "$and": [
+                    {"db_name": {"$eq": database_name}},
+                    {"table_name": {"$eq": table_name}},
+                    {"lookup_key_column_name": {"$eq": column_name}},
+                ]
+            },
+            n_results=5,
+        )
+
+        ret = []
+        if not results["documents"] or not results["metadatas"]:
+            return ret
+
+        for index, document in enumerate(results["documents"]):
+            metadata = results["metadatas"][index][0]
+            lookup_key = metadata["lookup_key_column_name"]
+            lookup_value = metadata["lookup_key_column_value"]
+            if not isinstance(lookup_key, int):
+                continue
+            if not isinstance(lookup_value, (str, int)):
+                continue
+            ret.append({"lookup_key": lookup_key, "column_value": lookup_value, "data": document})
+
+        # Return the lookup key, column value and the actual data
+        return ret
 
     def get_column_type(self, column_name: str) -> ColumnType:
-        """ Get the column type for the given column name.
+        """Get the column type for the given column name.
 
         Args:
             column_name (str): Column name
@@ -271,14 +316,13 @@ class VectorDBDriver:
 
         raise NotImplementedError("This method is not implemented yet.")
 
-
     def store_column_info_in_db(
         self,
         column_name: str,
         description: str,
         column_type: ColumnType,
     ) -> None:
-        """ Store the column information in the database.
+        """Store the column information in the database.
 
         Args:
             column_name (str): Column name
@@ -288,12 +332,11 @@ class VectorDBDriver:
 
         raise NotImplementedError("This method is not implemented yet.")
 
-
     @staticmethod
     def initialize_nlqs_vectordb(
         chroma_config: ChromaDBConfig,
     ) -> None:
-        """ Initialize the NLQS VectorDB collections.
+        """Initialize the NLQS VectorDB collections.
 
         Args:
             chroma_config (ChromaDBConfig): ChromaDB configuration
@@ -320,12 +363,11 @@ class VectorDBDriver:
         except Exception as e:
             print(f"Error creating NLQS collections: {e}")
 
-
     @staticmethod
     def purge_nlqs_vectordb(
         chroma_config: ChromaDBConfig,
     ) -> None:
-        """ Purge the NLQS VectorDB collections
+        """Purge the NLQS VectorDB collections
 
         Args:
             chroma_config (ChromaDBConfig): ChromaDB configuration
@@ -340,17 +382,13 @@ class VectorDBDriver:
         except Exception as e:
             print(f"Error purging NLQS collections: {e}")
 
-
     @staticmethod
-    def populate_nlqs_vectordb(
+    def populate_nlqs_dataset_info(
         chroma_config: ChromaDBConfig,
-        column_info: Optional[DataFrame] = None,
-        dataset_info: Optional[DataFrame] = None,
-        table_info: Optional[DataFrame] = None,
-        batch_size:int = DEFAULT_BATCH_SIZE,
-        
+        dataset_info: DataFrame,
+        batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
-        """ Populate the NLQS VectorDB collections
+        """Populate the NLQS VectorDB collections
 
         Args:
             chroma_config (ChromaDBConfig): ChromaDB configuration
@@ -360,106 +398,128 @@ class VectorDBDriver:
 
         vectordb_driver = VectorDBDriver(chroma_config)
 
-        if column_info is not None:
+        print("Populating the dataset collection...")
 
-            print("Populating the column info collection...")
+        # Populate the dataset collection
+        ids = [str(i + 1) for i in range(len(dataset_info))]
 
-            # Ids of the rows
-            ids = [str(i+1) for i in range(len(column_info))]
+        for index in tqdm(range(0, len(dataset_info), batch_size)):
+            documents = dataset_info["description"].astype(str).tolist()[index : index + batch_size]
+            db_names = dataset_info["db_name"].astype(str).tolist()[index : index + batch_size]
+            table_names = dataset_info["table_name"].astype(str).tolist()[index : index + batch_size]
+            lookup_key_column_names = (
+                dataset_info["lookup_key_column_name"].astype(str).tolist()[index : index + batch_size]
+            )
+            lookup_key_column_values = (
+                dataset_info["lookup_key_column_value"].astype(str).tolist()[index : index + batch_size]
+            )
+            embeddings = dataset_info["embedding"].tolist()[index : index + batch_size]
 
-            for index in tqdm(range(0, len(column_info), batch_size)):
-
-
-                descriptions = column_info["description"].astype(str).tolist()[index:index+batch_size]
-                db_names = column_info["db_name"].astype(str).tolist()[index:index+batch_size]
-                table_names = column_info["table_name"].astype(str).tolist()[index:index+batch_size]
-                column_names = column_info["column_name"].astype(str).tolist()[index:index+batch_size]
-                column_types = column_info["column_type"].astype(str).tolist()[index:index+batch_size]
-                embeddings = column_info["embedding"].tolist()[index:index+batch_size]
-
-                # Create metadata objects
-                metadatas = []
-                for i in range(len(descriptions)):
-                    metadatas.append({
-                        "db_name": db_names[i],
-                        "table_name": table_names[i],
-                        "column_name": column_names[i],
-                        "column_type": column_types[i]
-                    })
-                
-                # Populate the column info collection
-                vectordb_driver.column_info_collection.add(
-                    ids=ids[index:index+batch_size],
-                    documents=descriptions,
-                    embeddings=embeddings,
-                    metadatas=metadatas,
-                )
-
-        
-        if dataset_info is not None:
-
-            print("Populating the dataset collection...")
-
-            # Populate the dataset collection
-            ids = [str(i+1) for i in range(len(dataset_info))]
-
-            for index in tqdm(range(0, len(dataset_info), batch_size)):
-
-                documents = dataset_info["description"].astype(str).tolist()[index:index+batch_size]
-                db_names = dataset_info["db_name"].astype(str).tolist()[index:index+batch_size]
-                table_names = dataset_info["table_name"].astype(str).tolist()[index:index+batch_size]
-                lookup_key_column_names = dataset_info["lookup_key_column_name"].astype(str).tolist()[index:index+batch_size]
-                lookup_key_column_values = dataset_info["lookup_key_column_value"].astype(str).tolist()[index:index+batch_size]
-                embeddings = dataset_info["embedding"].tolist()[index:index+batch_size]
-
-                # Create metadata objects
-                metadatas = []
-                for i in range(len(documents)):
-                    metadatas.append({
+            # Create metadata objects
+            metadatas = []
+            for i in range(len(documents)):
+                metadatas.append(
+                    {
                         "db_name": db_names[i],
                         "table_name": table_names[i],
                         "lookup_key_column_name": lookup_key_column_names[i],
-                        "lookup_key_column_value": lookup_key_column_values[i]
-                    })
-                
-                # Populate the dataset collection
-                vectordb_driver.dataset_collection.add(
-                    ids=ids[index:index+batch_size],
-                    documents=documents,
-                    embeddings=embeddings,
-                    metadatas=metadatas,
+                        "lookup_key_column_value": lookup_key_column_values[i],
+                    }
                 )
 
+            # Populate the dataset collection
+            vectordb_driver.dataset_collection.add(
+                ids=ids[index : index + batch_size],
+                documents=documents,
+                embeddings=embeddings,
+                metadatas=metadatas,
+            )
 
-        if table_info is not None:
+    @staticmethod
+    def populate_nlqs_table_info(
+        chroma_config: ChromaDBConfig,
+        table_info: DataFrame,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+    ) -> None:
+        """Populate the NLQS VectorDB collections
 
-            print("Populating the table description collection...")
+        Args:
+            chroma_config (ChromaDBConfig): ChromaDB configuration
+            column_info (DataFrame): Column information
+            dataset_info (DataFrame): Dataset information
+        """
+
+        vectordb_driver = VectorDBDriver(chroma_config)
+
+        print("Populating the table description collection...")
+
+        # Populate the table description collection
+        ids = [str(i + 1) for i in range(len(table_info))]
+
+        for index in tqdm(range(0, len(table_info), batch_size)):
+            documents = table_info["description"].astype(str).tolist()[index : index + batch_size]
+            db_names = table_info["db_name"].astype(str).tolist()[index : index + batch_size]
+            table_names = table_info["table_name"].astype(str).tolist()[index : index + batch_size]
+            embeddings = table_info["embedding"].tolist()[index : index + batch_size]
+
+            # Create metadata objects
+            metadatas = []
+            for i in range(len(documents)):
+                metadatas.append({"db_name": db_names[i], "table_name": table_names[i]})
 
             # Populate the table description collection
-            ids = [str(i+1) for i in range(len(table_info))]
+            vectordb_driver.table_description_collection.add(
+                ids=ids[index : index + batch_size],
+                documents=documents,
+                embeddings=embeddings,
+                metadatas=metadatas,
+            )
 
-            for index in tqdm(range(0, len(table_info), batch_size)):
-                documents = table_info["description"].astype(str).tolist()[index:index+batch_size]
-                db_names = table_info["db_name"].astype(str).tolist()[index:index+batch_size]
-                table_names = table_info["table_name"].astype(str).tolist()[index:index+batch_size]
-                embeddings = table_info["embedding"].tolist()[index:index+batch_size]
+    @staticmethod
+    def populate_nlqs_column_info(
+        chroma_config: ChromaDBConfig,
+        column_info: DataFrame,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+    ) -> None:
+        """Populate the NLQS VectorDB collections
 
-                # Create metadata objects
-                metadatas = []
-                for i in range(len(documents)):
-                    metadatas.append({
+        Args:
+            chroma_config (ChromaDBConfig): ChromaDB configuration
+            column_info (DataFrame): Column information
+            dataset_info (DataFrame): Dataset information
+        """
+
+        vectordb_driver = VectorDBDriver(chroma_config)
+
+        print("Populating the column info collection...")
+
+        # Ids of the rows
+        ids = [str(i + 1) for i in range(len(column_info))]
+
+        for index in tqdm(range(0, len(column_info), batch_size)):
+            descriptions = column_info["description"].astype(str).tolist()[index : index + batch_size]
+            db_names = column_info["db_name"].astype(str).tolist()[index : index + batch_size]
+            table_names = column_info["table_name"].astype(str).tolist()[index : index + batch_size]
+            column_names = column_info["column_name"].astype(str).tolist()[index : index + batch_size]
+            column_types = column_info["column_type"].astype(str).tolist()[index : index + batch_size]
+            embeddings = column_info["embedding"].tolist()[index : index + batch_size]
+
+            # Create metadata objects
+            metadatas = []
+            for i in range(len(descriptions)):
+                metadatas.append(
+                    {
                         "db_name": db_names[i],
-                        "table_name": table_names[i]
-                    })
-                
-                # Populate the table description collection
-                vectordb_driver.table_description_collection.add(
-                    ids=ids[index:index+batch_size],
-                    documents=documents,
-                    embeddings=embeddings,
-                    metadatas=metadatas,
+                        "table_name": table_names[i],
+                        "column_name": column_names[i],
+                        "column_type": column_types[i],
+                    }
                 )
 
-
-
-
+            # Populate the column info collection
+            vectordb_driver.column_info_collection.add(
+                ids=ids[index : index + batch_size],
+                documents=descriptions,
+                embeddings=embeddings,
+                metadatas=metadatas,
+            )

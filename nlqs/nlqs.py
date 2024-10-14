@@ -1,7 +1,7 @@
 import logging
-from math import fabs
 import re
 from dataclasses import dataclass
+from math import fabs
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
 
@@ -34,7 +34,6 @@ stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
 
 
-
 @dataclass
 class NLQSResult:
     records: List[Dict[str, Any]]
@@ -65,16 +64,13 @@ class NLQS:
         self.chroma_config = chroma_config
         self.vectordb_driver = VectorDBDriver(chroma_config)
 
-
         self.table_name = connection_config.dataset_table_name
         self.uri_column = connection_config.uri_column
         self.output_columns = connection_config.output_columns
 
         # Test if all infrastructure is available
-        if (self.vectordb_driver.check_nlqs_collections_exists() is False):
+        if self.vectordb_driver.check_nlqs_collections_exists() is False:
             raise ValueError("ChromaDB collections do not exist. Please create them.")
-        
-
 
     # Step 4
     def execute_nlqs_query_workflow(self, user_input: str, chat_history: List[Tuple[str, str]]) -> NLQSResult:

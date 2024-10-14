@@ -1,15 +1,15 @@
 import json
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, TypedDict, Union
 
 import chromadb
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI, OpenAI
-from typing import TypedDict
+from sqlalchemy import column
 
-from nlqs.vectordb_driver import ColumnType, VectorDBDriver
+from nlqs.vectordb_driver import ColumnType, DataCollectionMetadata, VectorDBDriver
 from utils.json_outputs import validate_llm_output_keys
 
 # Create a logger object
@@ -21,7 +21,7 @@ logger.setLevel(logging.INFO)
 
 class InputIntent(TypedDict):
     """Class to represent the input intent."""
-    
+
     summary: str
     user_intent: str
     qualitative_statements: List[str]
@@ -125,7 +125,7 @@ def summarize(
     # Updated NLQS Algorithm:
     # 1. Extract a list of qualitative and quantitative statements from the user input along with the user intent.
     # 2. Identify the relevant columns from the data based on the statements extracted and available column descriptions.
-    # 3. Generate a structured output in JSON format with the summary, numerical data, categorical data, descriptive data, 
+    # 3. Generate a structured output in JSON format with the summary, numerical data, categorical data, descriptive data,
     # user requested columns, and user intent.
     intent_classification_prompt = ChatPromptTemplate.from_messages(
         [
@@ -179,7 +179,6 @@ def summarize(
         ]
     )
 
-
     output_parser = StrOutputParser()
     chain = intent_classification_prompt | llm | output_parser
 
@@ -190,9 +189,8 @@ def summarize(
         summarized_input_dict = json.loads(summarized_input_intent)
 
         missing_keys = validate_llm_output_keys(
-            llm_output=summarized_input_dict, 
-            reference_dict=REFERENCE_SUMMARIZED_INTENT_DICT
-            )
+            llm_output=summarized_input_dict, reference_dict=REFERENCE_SUMMARIZED_INTENT_DICT
+        )
 
         if len(missing_keys) > 0:
             logger.error(f"Missing keys in summarized_input_dict: {missing_keys}")
@@ -210,12 +208,8 @@ def summarize(
         # If parsing fails, return an empty SummarizedInput
         logger.error(f"Error parsing summarized_input_intent for user input: {user_input}")
         summarized_input_intent = InputIntent(
-            summary="",
-            user_intent="", 
-            qualitative_statements=[], 
-            quantitative_statements=[]
+            summary="", user_intent="", qualitative_statements=[], quantitative_statements=[]
         )
-    
 
     column_descriptions = list(column_descriptions_dictionary.items())
 
@@ -290,10 +284,9 @@ def summarize(
     try:
         # Attempt to parse the summarized input as JSON
         summarized_input_dict = json.loads(summarized_input_str)
-        
+
         missing_keys = validate_llm_output_keys(
-            llm_output=summarized_input_dict, 
-            reference_dict=REFERENCE_SUMMARIZED_OUTPUT_DICT
+            llm_output=summarized_input_dict, reference_dict=REFERENCE_SUMMARIZED_OUTPUT_DICT
         )
 
         if len(missing_keys) > 0:
@@ -308,8 +301,7 @@ def summarize(
     logger.info(f"user input: {user_input}")
     logger.info(f"Summarized input: {summarized_input_dict}")
 
-
-    # Validate the qualitative and quantitative columns against the available data columns / 
+    # Validate the qualitative and quantitative columns against the available data columns /
     # pick the most relevant columns
     numerical_data = {}
     categorical_data = {}
@@ -327,7 +319,7 @@ def summarize(
 
             if closest_column_name not in column_descriptions_dictionary:
                 raise ValueError(f"Closest column name '{closest_column_name}' not found in chroma columns collection.")
-            
+
             # Add the column to the corresponding dictionary
             if column_type == ColumnType.NUMERICAL:
                 numerical_data[closest_column_name] = description
@@ -339,7 +331,7 @@ def summarize(
                 identifier_data[closest_column_name] = description
             else:
                 raise ValueError(f"Invalid column type '{column_type}' for column '{closest_column_name}'")
-            
+
         else:
             # Add the column to the corresponding dictionary
             numerical_data[column_name] = description
@@ -354,7 +346,7 @@ def summarize(
 
             if closest_column_name not in column_descriptions_dictionary:
                 raise ValueError(f"Closest column name '{closest_column_name}' not found in chroma columns collection.")
-            
+
             if column_type == ColumnType.NUMERICAL:
                 numerical_data[closest_column_name] = description
             elif column_type == ColumnType.CATEGORICAL:

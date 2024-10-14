@@ -1,4 +1,5 @@
-from typing import Any, List, Dict
+from typing import Any, Dict, List
+
 
 def validate_llm_output_keys(llm_output: Dict[str, Any], reference_dict: Dict[str, Any]) -> List[str]:
     """Validate that all keys in the reference_dict are present in the llm_output.
@@ -9,8 +10,9 @@ def validate_llm_output_keys(llm_output: Dict[str, Any], reference_dict: Dict[st
 
     Returns:
         List[str]: _description_
-    """    
-    def find_missing_keys(d1: Dict[str, Any], d2: Dict[str, Any], parent_key: str = '') -> List[str]:
+    """
+
+    def find_missing_keys(d1: Dict[str, Any], d2: Dict[str, Any], parent_key: str = "") -> List[str]:
         missing = []
         for key in d1:
             full_key = f"{parent_key}.{key}" if parent_key else key
@@ -21,4 +23,3 @@ def validate_llm_output_keys(llm_output: Dict[str, Any], reference_dict: Dict[st
         return missing
 
     return find_missing_keys(reference_dict, llm_output)
-    

@@ -1,12 +1,9 @@
-import pytest
 from pathlib import Path
-import chromadb
 
-from nlqs.vectordb_driver import (
-    ChromaDBConfig,
-    ColumnType,
-    VectorDBDriver,
-)
+import chromadb
+import pytest
+
+from nlqs.vectordb_driver import ChromaDBConfig, ColumnType, VectorDBDriver
 
 
 def test_vectordb_driver_initialization(vectordb_driver):
@@ -17,6 +14,7 @@ def test_vectordb_driver_initialization(vectordb_driver):
     assert vectordb_driver.chroma_config.port == 8000
     assert vectordb_driver.chroma_config.is_local is True
 
+
 def test_check_nlqs_collections_exists(vectordb_driver):
     # Mock the get_chroma_collection method
     vectordb_driver.get_chroma_collection = lambda name: True
@@ -25,6 +23,7 @@ def test_check_nlqs_collections_exists(vectordb_driver):
     vectordb_driver.get_chroma_collection = lambda name: None
     assert vectordb_driver.check_nlqs_collections_exists() is False
 
+
 def test_get_chroma_collection(vectordb_driver):
     # Mock the chroma_client.get_collection method
     vectordb_driver.chroma_client.get_collection = lambda name: True
@@ -32,6 +31,7 @@ def test_get_chroma_collection(vectordb_driver):
 
     vectordb_driver.chroma_client.get_collection = lambda name: None
     assert vectordb_driver.get_chroma_collection("test_collection") is None
+
 
 def test_column_info_collection(vectordb_driver):
     # Mock the get_chroma_collection method
@@ -42,6 +42,7 @@ def test_column_info_collection(vectordb_driver):
     with pytest.raises(ValueError):
         vectordb_driver.column_info_collection
 
+
 def test_dataset_collection(vectordb_driver):
     # Mock the get_chroma_collection method
     vectordb_driver.get_chroma_collection = lambda name: True
@@ -50,6 +51,7 @@ def test_dataset_collection(vectordb_driver):
     vectordb_driver.get_chroma_collection = lambda name: None
     with pytest.raises(ValueError):
         vectordb_driver.dataset_collection
+
 
 def test_get_closest_column_from_description(vectordb_driver: VectorDBDriver):
     # Mock the column_info_collection property
@@ -61,13 +63,12 @@ def test_get_closest_column_from_description(vectordb_driver: VectorDBDriver):
     # }
 
     closest_column_name, column_type = vectordb_driver.get_closest_column_from_description(
-        "approximate_column_name",
-        "user_description",
-        ["sample_data"]
+        "approximate_column_name", "user_description", ["sample_data"]
     )
 
     assert closest_column_name == "test_column"
     assert column_type == ColumnType.DESCRIPTIVE
+
 
 def test_initialize_nlqs_vectordb(chroma_config):
     # # Mock the create_collection method
@@ -79,6 +80,7 @@ def test_initialize_nlqs_vectordb(chroma_config):
     # assert chromadb.PersistentClient.create_collection(chroma_config.column_info_collection_name) is True
     # assert chromadb.PersistentClient.create_collection(chroma_config.dataset_collection_name) is True
     raise NotImplementedError("Test not implemented")
+
 
 def test_populate_nlqs_vectordb(chroma_config):
     # # Mock the add method

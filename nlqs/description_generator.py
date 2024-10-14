@@ -155,7 +155,6 @@ def store_descriptions_in_db(
     print("Column metadata (name, description, type) stored in the database.")
 
 
-
 def generate_column_description(df: pd.DataFrame, db_driver: Union[SQLiteDriver, PostgresDriver]):
     # Get column descriptions along with types
     column_descriptions = get_column_descriptions(dataframe=df)

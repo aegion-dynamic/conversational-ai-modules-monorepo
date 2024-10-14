@@ -146,6 +146,7 @@ def chroma_config():
         is_local=True,
     )
 
+
 @pytest.fixture
 def vectordb_driver(chroma_config):
     return VectorDBDriver(chroma_config)
