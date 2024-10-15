@@ -174,83 +174,85 @@ class NLQS:
         elif intent == "phatic_communication":
             # Kill the workflow if the user input is phatic communication
             return NLQSResult(records=[], uris=[], is_input_irrelevant=True)
-        else:
-            print("checking for user requested columns...")
-            if summarized_input.user_requested_columns:
-                numerical_data = summarized_input.numerical_data
-                categorical_data = summarized_input.categorical_data
-                # TODO: use descriptive data...
-                descriptive_data = summarized_input.descriptive_data
+        # TODO: Figure out other intents in the future
 
-                quantitaive_query = generate_quantitaive_search_query(numerical_data, self.table_name, primary_key)
-                quantitative_ids_uncleaned = driver.execute_query(quantitaive_query)
+        # This is the standard workflow for the NLQS
+        print("checking for user requested columns...")
+        if summarized_input.user_requested_columns:
+            numerical_data = summarized_input.numerical_data
+            categorical_data = summarized_input.categorical_data
+            # TODO: use descriptive data...
+            descriptive_data = summarized_input.descriptive_data
 
-                quantitative_ids = []
+            quantitaive_query = generate_quantitaive_search_query(numerical_data, self.table_name, primary_key)
+            quantitative_ids_uncleaned = driver.execute_query(quantitaive_query)
 
-                if quantitative_ids_uncleaned:
-                    quantitative_ids = [item[0] for item in quantitative_ids_uncleaned]
-                    print(f"quantitative_ids: {quantitative_ids}")
+            quantitative_ids = []
 
-                qualitative_ids = qualitative_search(chroma_data_collection, categorical_data, primary_key)
-                print(f"qualitative_ids: {qualitative_ids}")
+            if quantitative_ids_uncleaned:
+                quantitative_ids = [item[0] for item in quantitative_ids_uncleaned]
+                print(f"quantitative_ids: {quantitative_ids}")
 
-                # Find the intersection of quantitative_ids and qualitative_ids
-                if not quantitative_ids or not qualitative_ids:
-                    intersection_ids = quantitative_ids or qualitative_ids
-                else:
-                    intersection_ids = list(set(quantitative_ids) & set(qualitative_ids))
+            qualitative_ids = qualitative_search(chroma_data_collection, categorical_data, primary_key)
+            print(f"qualitative_ids: {qualitative_ids}")
 
-                # Ensure intersection_ids is set to qualitative_ids if it's empty
-                if not intersection_ids:
-                    intersection_ids = qualitative_ids
-
-                print(intersection_ids)
-
-                intersection_ids_string = ",".join(str(id) for id in intersection_ids)
-
-                # Initial query to retrieve all columns based on the intersection IDs
-                final_query = f"SELECT * FROM {self.table_name} WHERE {primary_key} IN ({intersection_ids_string})"
-
-                # Get the columns in the order they appear in the database
-                columns_database = driver.get_database_columns(self.table_name)
-
-                # Variables for specific columns
-                uri_column = self.uri_column
-                output_columns = self.output_columns
-
-                # If output_columns is specified, modify the query to select only those columns
-                if output_columns:
-                    final_query = f"SELECT {','.join(col for col in output_columns)} FROM {self.table_name} WHERE {primary_key} IN ({intersection_ids_string})"
-                    data_retreived = driver.execute_query(final_query)
-                    # Since we now have a subset of columns, use output_columns directly
-                    columns_to_use = output_columns
-                else:
-                    # Execute the query to retrieve the data with all columns
-                    data_retreived = driver.execute_query(final_query)
-                    columns_to_use = columns_database
-
-                # Initialize lists to hold records and URIs
-                records = []
-                uris = []
-
-                if not data_retreived:
-                    result = NLQSResult(records=[], uris=[])
-                    return result
-
-                # Process the retrieved data
-                for row in data_retreived:
-                    record = dict(zip(columns_to_use, row))
-                    if uri_column in record:
-                        uris.append(str(record[uri_column]))
-                        del record[uri_column]  # Remove the URI column data from the record
-                    records.append(record)
-
-                # Create the result object
-                result = NLQSResult(records=records, uris=uris)
-
-                print(f"result: {result}")
-                logger.info(f"result: {result}")
+            # Find the intersection of quantitative_ids and qualitative_ids
+            if not quantitative_ids or not qualitative_ids:
+                intersection_ids = quantitative_ids or qualitative_ids
             else:
+                intersection_ids = list(set(quantitative_ids) & set(qualitative_ids))
+
+            # Ensure intersection_ids is set to qualitative_ids if it's empty
+            if not intersection_ids:
+                intersection_ids = qualitative_ids
+
+            print(intersection_ids)
+
+            intersection_ids_string = ",".join(str(id) for id in intersection_ids)
+
+            # Initial query to retrieve all columns based on the intersection IDs
+            final_query = f"SELECT * FROM {self.table_name} WHERE {primary_key} IN ({intersection_ids_string})"
+
+            # Get the columns in the order they appear in the database
+            columns_database = driver.get_database_columns(self.table_name)
+
+            # Variables for specific columns
+            uri_column = self.uri_column
+            output_columns = self.output_columns
+
+            # If output_columns is specified, modify the query to select only those columns
+            if output_columns:
+                final_query = f"SELECT {','.join(col for col in output_columns)} FROM {self.table_name} WHERE {primary_key} IN ({intersection_ids_string})"
+                data_retreived = driver.execute_query(final_query)
+                # Since we now have a subset of columns, use output_columns directly
+                columns_to_use = output_columns
+            else:
+                # Execute the query to retrieve the data with all columns
+                data_retreived = driver.execute_query(final_query)
+                columns_to_use = columns_database
+
+            # Initialize lists to hold records and URIs
+            records = []
+            uris = []
+
+            if not data_retreived:
                 result = NLQSResult(records=[], uris=[])
+                return result
+
+            # Process the retrieved data
+            for row in data_retreived:
+                record = dict(zip(columns_to_use, row))
+                if uri_column in record:
+                    uris.append(str(record[uri_column]))
+                    del record[uri_column]  # Remove the URI column data from the record
+                records.append(record)
+
+            # Create the result object
+            result = NLQSResult(records=records, uris=uris)
+
+            print(f"result: {result}")
+            logger.info(f"result: {result}")
+        else:
+            result = NLQSResult(records=[], uris=[])
 
         return result
