@@ -12,7 +12,8 @@ from pydantic.v1 import SecretStr
 from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
 from nlqs.parameters import OPENAI_API_KEY
-from nlqs.query import generate_quantitaive_search_query, qualitative_search, summarize
+from nlqs.query_construction import generate_quantitaive_search_query, qualitative_search
+from nlqs.summarization import summarize
 from nlqs.vectordb_driver import ChromaDBConfig, VectorDBDriver
 
 # Create a logger object
