@@ -1,9 +1,8 @@
 from pathlib import Path
 
-import chromadb
 import pytest
 
-from nlqs.vectordb_driver import ChromaDBConfig, ColumnType, VectorDBDriver
+from nlqs.vectordb_driver import ColumnType, VectorDBDriver
 
 
 def test_vectordb_driver_initialization(vectordb_driver):

@@ -45,6 +45,7 @@ from pathlib import Path
 from typing import Callable, List, Mapping, Optional, Tuple, TypedDict, Union
 
 import chromadb
+from chromadb.api import ClientAPI
 from chromadb.config import Settings
 from pandas import DataFrame
 from tqdm import tqdm
@@ -101,6 +102,31 @@ class ChromaDBConfig:
     password: Optional[str] = None
 
 
+def create_chroma_client(chroma_config: ChromaDBConfig) -> ClientAPI:
+    """Create a Chroma client based on the ChromaDBConfig.
+
+    Args:
+        chroma_config (ChromaDBConfig): ChromaDB configuration
+
+    Returns:
+        ClientAPI: Chroma client
+    """
+    chroma_type = chroma_config.is_local
+    if chroma_type:
+        chroma_client = chromadb.PersistentClient(path=str(chroma_config.persist_path))
+    else:
+        chroma_client = chromadb.HttpClient(
+            port=chroma_config.port,
+            host=chroma_config.host,
+            settings=Settings(
+                chroma_client_auth_provider="chromadb.auth.basic.BasicAuthClientProvider",
+                chroma_client_auth_credentials=f"{chroma_config.username}:{chroma_config.password}",
+            ),
+        )
+
+    return chroma_client
+
+
 class VectorDBDriver:
     def __init__(self, chroma_config: ChromaDBConfig):
         """Constructor for the VectorDBDriver
@@ -110,23 +136,15 @@ class VectorDBDriver:
         """
         self.chroma_config = chroma_config
 
-        chroma_type = chroma_config.is_local
-        if chroma_type:
-            self.chroma_client = chromadb.PersistentClient(path=str(chroma_config.persist_path))
+        self.chroma_client = create_chroma_client(chroma_config)
+
+        if self.check_nlqs_collections_exists():
+            print("NLQS collections already exist.")
         else:
-            self.chroma_client = chromadb.HttpClient(
-                port=chroma_config.port,
-                host=chroma_config.host,
-                settings=Settings(
-                    chroma_client_auth_provider="chromadb.auth.basic.BasicAuthClientProvider",
-                    chroma_client_auth_credentials=f"{chroma_config.username}:{chroma_config.password}",
-                ),
-            )
+            raise ValueError("NLQS collections do not exist. Please initialize the collections.")
 
     def check_nlqs_collections_exists(
         self,
-        column_info_collection_name: str = DEFAULT_COLUMN_INFO_COLLECTION_NAME,
-        dataset_collection_name: str = DEFAULT_DATASET_COLLECTION_NAME,
     ) -> bool:
         """Check if the NLQS collections exist, and return them if they do.
 
@@ -138,10 +156,17 @@ class VectorDBDriver:
             Tuple[Optional[chromadb.Collection], Optional[chromadb.Collection]]: Tuple of custom column data collection and custom dataset collection
         """
 
-        custom_column_data_collection = self.get_chroma_collection(column_info_collection_name)
-        custom_dataset_collection = self.get_chroma_collection(dataset_collection_name)
+        custom_column_data_collection = self.get_chroma_collection(self.chroma_config.column_info_collection_name)
+        custom_dataset_collection = self.get_chroma_collection(self.chroma_config.dataset_collection_name)
+        custom_table_description_collection = self.get_chroma_collection(
+            self.chroma_config.table_description_collection_name
+        )
 
-        return (custom_column_data_collection is not None) and (custom_dataset_collection is not None)
+        return (
+            (custom_column_data_collection is not None)
+            and (custom_dataset_collection is not None)
+            and (custom_table_description_collection is not None)
+        )
 
     def get_chroma_collection(
         self,
@@ -396,7 +421,10 @@ class VectorDBDriver:
             dataset_info (DataFrame): Dataset information
         """
 
-        vectordb_driver = VectorDBDriver(chroma_config)
+        chroma_client = create_chroma_client(chroma_config)
+
+        # Create the collection if it does not exist
+        collection = chroma_client.create_collection(chroma_config.dataset_collection_name, get_or_create=True)
 
         print("Populating the dataset collection...")
 
@@ -428,7 +456,7 @@ class VectorDBDriver:
                 )
 
             # Populate the dataset collection
-            vectordb_driver.dataset_collection.add(
+            collection.add(
                 ids=ids[index : index + batch_size],
                 documents=documents,
                 embeddings=embeddings,
@@ -449,7 +477,10 @@ class VectorDBDriver:
             dataset_info (DataFrame): Dataset information
         """
 
-        vectordb_driver = VectorDBDriver(chroma_config)
+        chroma_client = create_chroma_client(chroma_config)
+
+        # Create the collection if it does not exist
+        collection = chroma_client.create_collection(chroma_config.dataset_collection_name, get_or_create=True)
 
         print("Populating the table description collection...")
 
@@ -468,7 +499,7 @@ class VectorDBDriver:
                 metadatas.append({"db_name": db_names[i], "table_name": table_names[i]})
 
             # Populate the table description collection
-            vectordb_driver.table_description_collection.add(
+            collection.add(
                 ids=ids[index : index + batch_size],
                 documents=documents,
                 embeddings=embeddings,
@@ -489,7 +520,10 @@ class VectorDBDriver:
             dataset_info (DataFrame): Dataset information
         """
 
-        vectordb_driver = VectorDBDriver(chroma_config)
+        chroma_client = create_chroma_client(chroma_config)
+
+        # Create the collection if it does not exist
+        collection = chroma_client.create_collection(chroma_config.dataset_collection_name, get_or_create=True)
 
         print("Populating the column info collection...")
 
@@ -517,7 +551,7 @@ class VectorDBDriver:
                 )
 
             # Populate the column info collection
-            vectordb_driver.column_info_collection.add(
+            collection.add(
                 ids=ids[index : index + batch_size],
                 documents=descriptions,
                 embeddings=embeddings,
