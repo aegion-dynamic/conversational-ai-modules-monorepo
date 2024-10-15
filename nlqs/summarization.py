@@ -361,6 +361,9 @@ def summarize(
             # Add the column to the corresponding dictionary
             categorical_data[column_name] = description
 
+    summazied_user_requested_columns: List[str] = summarized_input_dict.get("user_requested_columns", [])
+    get_validated_user_requested_columns(vectordb, summazied_user_requested_columns, "default_table", "default_db")
+
     summarized_input = SummarizedInput(
         summary=summarized_input_intent["summary"],
         numerical_data=numerical_data,
@@ -372,6 +375,49 @@ def summarize(
     )
 
     return summarized_input
+
+
+def get_validated_user_requested_columns(
+    vectordb_driver: VectorDBDriver, summazied_user_requested_columns: List[str], table_name: str, db_name: str
+) -> List[str]:
+    """Validates the user requested columns and returns a list of valid columns.
+
+    Args:
+        summazied_user_requested_columns (List[str]): The user requested columns.
+
+    Returns:
+        List[str]: A list of valid user requested columns.
+    """
+    if not summazied_user_requested_columns:
+        return []
+    if len(summazied_user_requested_columns) < 1:
+        return []
+
+    ret = []
+    # Go through each of the columns
+    for column_name in summazied_user_requested_columns:
+        # Check if the columns is present in the data
+        exists = vectordb_driver.check_if_column_name_exists(column_name, table_name, db_name)
+
+        # If it exists, add it to the list, continue to the next column
+        if exists:
+            ret.append(column_name)
+            continue
+
+        # If the column does not exist, find the closest column name
+        closest_column_name, column_type = vectordb_driver.get_closest_column_from_description(
+            approximate_column_name=column_name, users_description="", sample_data_strings=[]
+        )
+
+        # If the closest column name is not found, print a warning and continue to the next column
+        if not closest_column_name:
+            logger.warning(f"Closest column name not found for column '{column_name}'")
+            continue
+
+        # Now add the closest column name to the list
+        ret.append(closest_column_name)
+
+    return ret
 
 
 # def qualitaive_search(collection: chromadb.Collection, data: Dict[str, str], primary_key: str) -> List[str]:

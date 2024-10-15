@@ -236,6 +236,34 @@ class VectorDBDriver:
             )
         return collection
 
+    def check_if_column_name_exists(self, column_name: str, table_name: str, db_name: str) -> bool:
+        """Check if the column name exists in the database.
+
+        Args:
+            column_name (str): Column name
+            table_name (str): Table name
+            db_name (str): Database name
+
+        Returns:
+            bool: True if the column name exists, False otherwise
+        """
+
+        result = self.column_info_collection.query(
+            where={
+                "$and": [
+                    {"column_name": {"$eq": column_name}},
+                    {"table_name": {"$eq": table_name}},
+                    {"db_name": {"$eq": db_name}},
+                ]
+            }
+        )
+
+        # Check if the result is empty
+        if not result["documents"]:
+            return False
+        else:
+            return True
+
     def get_closest_column_from_description(
         self, approximate_column_name: str, users_description: str, sample_data_strings: List[str]
     ) -> Tuple[str, ColumnType]:
