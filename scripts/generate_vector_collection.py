@@ -130,4 +130,4 @@ if __name__ == "__main__":
     else:
         chroma_client = chromadb.HttpClient(port=chroma_config.port, host=chroma_config.host)
 
-    generate_chroma_collection(chroma_config.collection_name, chroma_client, connection_driver)
+    # generate_chroma_collection(chroma_config.collection_name, chroma_client, connection_driver)

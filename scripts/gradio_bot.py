@@ -12,7 +12,7 @@ from nlqs.database.sqlite import SQLiteConnectionConfig
 from nlqs.nlqs import NLQS, ChromaDBConfig
 
 # ChromaDB configuration
-chroma_config = ChromaDBConfig(collection_name="aegion")
+chroma_config = ChromaDBConfig()
 
 # SQLite configuration
 sqlite_config = SQLiteConnectionConfig(db_file=Path("../aegion.db"), dataset_table_name="new_dataset")

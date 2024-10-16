@@ -69,5 +69,7 @@ chroma
 
 .env
 
+.model_cache
+
 # Mac OS
 .DS_Store

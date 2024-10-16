@@ -12,13 +12,12 @@ from langchain_openai import ChatOpenAI
 from pydantic.v1 import SecretStr
 
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
-from nlqs.description_generator import get_chroma_collection
 from nlqs.nlqs import ChromaDBConfig, NLQSResult
 from nlqs.parameters import OPENAI_API_KEY
-from nlqs.query import generate_quantitaive_search_query, qualitative_search, summarize
+from nlqs.query_construction import generate_quantitaive_search_query, qualitative_search, summarize
 
 # ChromaDB configuration
-chroma_config = ChromaDBConfig(collection_name="aegion")
+chroma_config = ChromaDBConfig()
 
 # SQLite configuration
 sqlite_config = SQLiteConnectionConfig(
