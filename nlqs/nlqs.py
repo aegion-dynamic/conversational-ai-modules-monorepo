@@ -13,7 +13,7 @@ from pydantic import SecretStr
 from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
 from nlqs.parameters import OPENAI_API_KEY
-from nlqs.query_construction import generate_quantitaive_search_query, qualitative_search
+from nlqs.query_construction import construct_quantitaive_search_query_fragment, qualitative_search
 from nlqs.summarization import summarize
 from nlqs.vectordb_driver import ChromaDBConfig, VectorDBDriver
 
@@ -113,20 +113,21 @@ class NLQS:
 
         # Step 0 - Create the pre-requisite objects
 
-        # Database Connection
         driver = self.connection_driver
+        # (
+        #     column_descriptions,
+        #     numerical_columns,
+        #     categorical_columns,
+        #     descriptive_columns,
+        # )
 
-        (
-            column_descriptions,
-            numerical_columns,
-            categorical_columns,
-            descriptive_columns,
-        ) = driver.retrieve_descriptions_and_types_from_db()
+        column_descriptions_dict = self.vectordb_driver.retrieve_descriptions_and_types_from_db()
 
-        if column_descriptions == {}:
+        if column_descriptions_dict is None:
             raise ValueError("No data found in the database. Generate Column descriptions.")
 
-        primary_key = driver.get_primary_key(self.table_name)
+        # TODO: Get the primary key for the table
+        # primary_key = driver.get_primary_key(self.table_name)
 
         # Chroma Collection
         chroma_data_collection = self.vectordb_driver.dataset_collection
@@ -145,10 +146,10 @@ class NLQS:
         summarized_input = summarize(
             user_input=user_input,
             chat_history=chat_history,
-            column_descriptions_dictionary=column_descriptions,
-            numerical_columns=numerical_columns,
-            categorical_columns=categorical_columns,
-            descriptive_columns=descriptive_columns,
+            column_descriptions_dictionary=column_descriptions_dict["column_descriptions"],
+            numerical_columns=column_descriptions_dict["numerical_columns"],
+            categorical_columns=column_descriptions_dict["categorical_columns"],
+            descriptive_columns=column_descriptions_dict["descriptive_columns"],
             llm=self.llm,
             vectordb=self.vectordb_driver,
         )
@@ -159,10 +160,10 @@ class NLQS:
             summarized_input = summarize(
                 user_input=user_input,
                 chat_history=chat_history,
-                column_descriptions_dictionary=column_descriptions,
-                numerical_columns=numerical_columns,
-                categorical_columns=categorical_columns,
-                descriptive_columns=descriptive_columns,
+                column_descriptions_dictionary=column_descriptions_dict["column_descriptions"],
+                numerical_columns=column_descriptions_dict["numerical_columns"],
+                categorical_columns=column_descriptions_dict["categorical_columns"],
+                descriptive_columns=column_descriptions_dict["descriptive_columns"],
                 llm=self.llm,
                 vectordb=self.vectordb_driver,
             )
@@ -202,7 +203,9 @@ class NLQS:
             # TODO: use descriptive data...
             descriptive_data = summarized_input.descriptive_data
 
-            quantitaive_query = generate_quantitaive_search_query(numerical_data, self.table_name, primary_key)
+            quantitaive_query = construct_quantitaive_search_query_fragment(
+                numerical_data, self.table_name, primary_key
+            )
             quantitative_ids_uncleaned = driver.execute_query(quantitaive_query)
 
             quantitative_ids = []

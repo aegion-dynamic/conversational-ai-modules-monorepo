@@ -2,14 +2,14 @@ from typing import Dict, List
 from chromadb import Collection, QueryResult
 
 
-def generate_quantitaive_search_query(quantitaive_data: Dict[str, str], table_name: str, primary_key: str) -> str:
+def construct_quantitaive_search_query_fragment(quantitaive_data: Dict[str, str]) -> str:
     """Creates an SQL query from a dictionary of quantitative data.
 
     Args:
         quantitaive_data (dict): A dictionary of quantitative data in the form {'column_name': 'condition'}.
 
     Returns:
-        str: The generated SQL query.
+        str: The generated SQL query fragment.
     """
     if not quantitaive_data:
         return ""  # Return an empty string if the dictionary is empty
@@ -40,8 +40,31 @@ def generate_quantitaive_search_query(quantitaive_data: Dict[str, str], table_na
     # Combine the query parts with AND
     query_constraints = " AND ".join(query_parts)
 
-    query = f"select {primary_key} from {table_name} where {query_constraints}"
-    return query
+    return query_constraints
+
+
+def construct_categorical_search_query_fragment(categorical_data: Dict[str, str]) -> str:
+    """Creates an SQL query from a dictionary of categorical data.
+
+    Args:
+        categorical_data (dict): A dictionary of categorical data in the form {'column_name': 'condition'}.
+
+    Returns:
+        str: The generated SQL query fragment.
+    """
+    if not categorical_data:
+        return ""  # Return an empty string if the dictionary is empty
+
+    query_parts = []
+    for column, condition in categorical_data.items():
+        # Construct the query part
+        query_part = f"{column} = '{condition}'"
+        query_parts.append(query_part)
+
+    # Combine the query parts with AND
+    query_constraints = " AND ".join(query_parts)
+
+    return query_constraints
 
 
 def qualitative_search(collection: Collection, data: Dict[str, str], primary_key: str) -> List[int]:

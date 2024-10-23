@@ -119,3 +119,24 @@ def test_retrieve_descriptions_and_types_from_db(vectordb_driver: VectorDBDriver
     )
 
     assert results is None
+
+
+def test_check_if_column_name_exists(vectordb_driver: VectorDBDriver):
+
+    # Test with a column that exists
+    result = vectordb_driver.check_if_column_name_exists(
+        column_name="Description",
+        db_name=DEFAULT_DB_NAME,
+        table_name=DEFAULT_TABLE_NAME,
+    )
+
+    assert result is True
+
+    # Test with a column that does not exist
+    result = vectordb_driver.check_if_column_name_exists(
+        column_name="random_column",
+        db_name=DEFAULT_DB_NAME,
+        table_name=DEFAULT_TABLE_NAME,
+    )
+
+    assert result is False

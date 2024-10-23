@@ -48,4 +48,4 @@ dataset_info_df["embedding"] = dataset_info_df["embedding"].apply(lambda x: eval
 
 print("Populate the NLQS VectorDB dataset collection")
 
-VectorDBDriver.populate_nlqs_dataset_info(chroma_config, dataset_info=dataset_info_df)
+VectorDBDriver.populate_nlqs_dataset_info(chroma_config, dataset_info_df=dataset_info_df)

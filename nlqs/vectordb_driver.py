@@ -328,7 +328,7 @@ class VectorDBDriver:
             bool: True if the column name exists, False otherwise
         """
 
-        result = self.column_info_collection.query(
+        result = self.column_info_collection.get(
             where={
                 "$and": [
                     {"column_name": {"$eq": column_name}},
