@@ -1,15 +1,10 @@
-"""
-Enhanced Medical Cannabis Recommendation System
-
-This module implements an improved version of the conversational AI system for providing
-medical cannabis recommendations with natural language query generation capabilities.
-"""
 import openai
 from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
 import json
 from typing import List, Dict, Any, Optional
 from enum import Enum, auto
+from dataclasses import dataclass, field
 
 
 class State(Enum):
@@ -20,6 +15,19 @@ class State(Enum):
     MEDICAL_ASSESSMENT = auto()
     RECOMMENDATION = auto()
     CONCLUSION = auto()
+
+
+@dataclass
+class Response:
+    """
+    Data class for standardized responses.
+    """
+    bot_response: str
+    follow_up_question: str
+    sample_options: List[str] = field(default_factory=list)
+    conversation_complete: bool = False
+    state_complete: bool = False
+    natural_language_queries: List[str] = field(default_factory=list)
 
 
 class CannabisRecommendationSystem:
@@ -114,41 +122,31 @@ class CannabisRecommendationSystem:
             print(f"Error generating natural language queries: {e}")
             return []
 
-    def chat(self, user_input: str) -> Dict[str, Any]:
+    def chat(self, user_input: str) -> Response:
         """
         Process user input and generate a response.
         """
         print(f"Processing user input: {user_input}")
-        
-        # Handle initial greeting
-        if len(self.conversation_history) == 0:
-            initial_message = self.state_requirements[State.INITIAL_INQUIRY]["initial_message"]
-            self.conversation_history.append(ChatCompletionSystemMessageParam(content=initial_message, role="assistant"))
-            return {
-                "bot_response": initial_message,
-                "follow_up_question": "What kind of help are you looking for today?",
-                "sample_options": ["I need help with pain management", "I'm having trouble sleeping", "I'm looking for stress relief"]
-            }
 
         self.conversation_history.append(ChatCompletionUserMessageParam(content=user_input, role="user"))
         response = self.process_input(user_input)
-        self.conversation_history.append(ChatCompletionSystemMessageParam(content=response['bot_response'], role="assistant"))
+        self.conversation_history.append(ChatCompletionSystemMessageParam(content=response.bot_response, role="assistant"))
         return response
 
-    def process_input(self, user_input: str) -> Dict[str, Any]:
+    def process_input(self, user_input: str) -> Response:
         """
         Process the user input based on the current state and generate a response.
         """
         current_state_info = self.state_requirements[self.state]
         print(f"Processing input in state: {self.state.name}")
-        
+
         response = self.get_llm_response(user_input, current_state_info)
         if not response:
             return self.get_fallback_response()
 
         self.context.update(response.get('extracted_info', {}))
         print(f"Current context: {json.dumps(self.context, indent=2)}")
-        
+
         if self.state == State.RECOMMENDATION:
             queries = self.generate_natural_language_queries()
             response['natural_language_queries'] = queries
@@ -157,15 +155,22 @@ class CannabisRecommendationSystem:
 
         missing_info = [info for info in current_state_info['required_info'] if info not in self.context]
         print(f"Missing info: {missing_info}")
-        
+
         if not missing_info or response.get('state_complete', False):
             print(f"State {self.state.name} complete")
             self.transition_to_next_state()
 
         if self.state == State.CONCLUSION:
             response['conversation_complete'] = True
-        
-        return response
+
+        return Response(
+            bot_response=response.get('bot_response', "I'm here to assist you."),
+            follow_up_question=response.get('follow_up_question', ""),
+            sample_options=response.get('sample_options', []),
+            conversation_complete=response.get('conversation_complete', False),
+            state_complete=response.get('state_complete', False),
+            natural_language_queries=response.get('natural_language_queries', [])
+        )
 
     def get_openai_response_text(self, prompt: str, system_message: str) -> Optional[str]:
         """
@@ -180,7 +185,7 @@ class CannabisRecommendationSystem:
                 ],
                 temperature=0.7
             )
-            
+
             if response and response.choices and response.choices[0].message.content:
                 return response.choices[0].message.content
             return None
@@ -216,7 +221,7 @@ class CannabisRecommendationSystem:
                 prompt,
                 "You are a friendly product recommendation assistant. Use simple language."
             )
-            
+
             if response_text:
                 try:
                     return json.loads(response_text)
@@ -228,20 +233,21 @@ class CannabisRecommendationSystem:
             print(f"Error in get_llm_response: {e}")
             return None
 
-    def get_fallback_response(self) -> Dict[str, Any]:
+    def get_fallback_response(self) -> Response:
         """
-        Provide a fallback response when normal processing fails.
+        Provide a fallback response in case of errors.
         """
-        return {
-            "bot_response": "I'm having trouble understanding your input. Could you please clarify?",
-            "follow_up_question": "Is there a specific symptom or product you're looking for?",
-            "sample_options": ["Pain relief", "Stress relief", "Sleep aid"],
-            "conversation_complete": False
-        }
+        return Response(
+            bot_response="I'm sorry, I didn't understand that. Can you please clarify?",
+            follow_up_question="What else would you like to share?",
+            sample_options=[],
+            conversation_complete=False,
+            state_complete=False
+        )
 
     def transition_to_next_state(self):
         """
-        Transition to the next state in the conversation.
+        Transition to the next state based on the current state.
         """
         if self.state == State.INITIAL_INQUIRY:
             self.state = State.MEDICAL_ASSESSMENT
@@ -249,9 +255,12 @@ class CannabisRecommendationSystem:
             self.state = State.RECOMMENDATION
         elif self.state == State.RECOMMENDATION:
             self.state = State.CONCLUSION
-        
-        print(f"Transitioned to next state: {self.state.name}")
+        elif self.state == State.CONCLUSION:
+            print("Conversation concluded. Thank you!")
+        print(f"Transitioned to state: {self.state.name}")
 
+import os
+from dotenv import load_dotenv
 
 class CannabisRecommendationApp:
     """
@@ -283,21 +292,21 @@ class CannabisRecommendationApp:
                     break
 
                 response = self.system.chat(user_input)
-                print(f"\nAssistant: {response['bot_response']}")
+                print(f"\nAssistant: {response.bot_response}")
                 
-                if self.system.state == State.RECOMMENDATION and 'natural_language_queries' in response:
+                if self.system.state == State.RECOMMENDATION and response.natural_language_queries:
                     print("\nGenerated Queries:")
-                    for i, query in enumerate(response['natural_language_queries'], 1):
+                    for i, query in enumerate(response.natural_language_queries, 1):
                         print(f"{i}. {query}")
 
-                if 'follow_up_question' in response and self.system.state != State.CONCLUSION:
-                    print(f"\n{response['follow_up_question']}")
-                    if 'sample_options' in response:
+                if response.follow_up_question and self.system.state != State.CONCLUSION:
+                    print(f"\n{response.follow_up_question}")
+                    if response.sample_options:
                         print("\nSample responses:")
-                        for i, option in enumerate(response['sample_options'], 1):
+                        for i, option in enumerate(response.sample_options, 1):
                             print(f"{i}. {option}")
 
-                if response.get('conversation_complete', False):
+                if response.conversation_complete:
                     print("\nThank you for using the Product Recommendation Assistant. Take care!")
                     break
 
@@ -313,10 +322,7 @@ def main():
     Main function to run the Cannabis Recommendation Application.
     """
     try:
-        from dotenv import load_dotenv
-        import os
-        
-        load_dotenv()
+        load_dotenv()  # Load environment variables from .env file
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             print("API key not found in environment variables")
@@ -331,3 +337,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
