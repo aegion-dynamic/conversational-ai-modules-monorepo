@@ -43,7 +43,7 @@ from curses import meta
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Callable, List, Mapping, Optional, Tuple, TypedDict, Union
+from typing import Callable, List, Mapping, Optional, Tuple, TypedDict, Union, Dict
 
 import chromadb
 from chromadb.api import ClientAPI
@@ -96,6 +96,13 @@ class ClosestDataResult(TypedDict):
     lookup_key: str
     column_value: Union[str, int]
     data: str
+
+
+class ColumnDescriptions(TypedDict):
+    column_descriptions: Dict[str, str]
+    numerical_columns: List[str]
+    categorical_columns: List[str]
+    descriptive_columns: List[str]
 
 
 @dataclass
@@ -247,6 +254,67 @@ class VectorDBDriver:
                 f"Error: Collection '{self.chroma_config.table_description_collection_name}' does not exist."
             )
         return collection
+
+    def retrieve_descriptions_and_types_from_db(
+        self, db_name_filter: Optional[str] = None, table_name_filter: Optional[str] = None
+    ) -> Optional[ColumnDescriptions]:
+        """Retrieve the column descriptions and types from the database.
+
+        Args:
+            db_name_filter (Optional[str], optional): What the filter of the database name is . Defaults to None.
+            table_name_filter (Optional[str], optional): What the filter of the table name is. Defaults to None.
+
+        Raises:
+            ValueError: If no metadata is found in the chromadb query result
+
+        Returns:
+            Optional[ColumnDescriptions]: Column descriptions dictionary
+        """
+
+        # Get the column info collection
+        collection = self.column_info_collection
+
+        and_conditions = []
+
+        if db_name_filter:
+            and_conditions.append({"db_name": {"$eq": db_name_filter}})
+        if table_name_filter:
+            and_conditions.append({"table_name": {"$eq": table_name_filter}})
+
+        if len(and_conditions) > 0:
+            results = collection.get(where={"$and": and_conditions})
+        else:
+            results = collection.get()
+
+        if not results["documents"]:
+            return None
+
+        ret = ColumnDescriptions(
+            column_descriptions={},
+            numerical_columns=[],
+            categorical_columns=[],
+            descriptive_columns=[],
+        )
+
+        # Go throught the results and populate the dictionaries based on the column type
+        if not results["metadatas"]:
+            raise ValueError("No metadata found in the chromadb query result.")
+
+        for index, metadata in enumerate(results["metadatas"]):
+            column_name = str(metadata["column_name"])
+            column_description = str(results["documents"][index])
+            column_type = ColumnType(str(metadata["column_type"]))
+
+            ret["column_descriptions"][column_name] = str(column_description)
+
+            if column_type == ColumnType.NUMERICAL:
+                ret["numerical_columns"].append(column_name)
+            elif column_type == ColumnType.CATEGORICAL:
+                ret["categorical_columns"].append(column_name)
+            elif column_type == ColumnType.DESCRIPTIVE:
+                ret["descriptive_columns"].append(column_name)
+
+        return ret
 
     def check_if_column_name_exists(self, column_name: str, table_name: str, db_name: str) -> bool:
         """Check if the column name exists in the database.

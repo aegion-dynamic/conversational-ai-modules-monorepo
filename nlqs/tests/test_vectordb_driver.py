@@ -1,9 +1,4 @@
-from pathlib import Path
-from random import sample
-
 import pandas as pd
-from regex import D
-
 from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME
 from nlqs.vectordb_driver import ChromaDBConfig, ColumnType, VectorDBDriver
 
@@ -87,6 +82,7 @@ def test_populate_nlqs_table_info(chroma_config: ChromaDBConfig, embedding_funct
 
 def test_get_closest_column_from_description(vectordb_driver: VectorDBDriver):
 
+    # Note: This test is dependent on the data in the data files
     column_name, column_type = vectordb_driver.get_closest_column_from_description(
         approximate_column_name="Product Description",
         users_description="A column that describes the product in detail.",
@@ -97,3 +93,29 @@ def test_get_closest_column_from_description(vectordb_driver: VectorDBDriver):
 
     assert column_name == "Description"
     assert column_type == ColumnType.DESCRIPTIVE
+
+
+def test_retrieve_descriptions_and_types_from_db(vectordb_driver: VectorDBDriver):
+
+    # Test without filters
+    results = vectordb_driver.retrieve_descriptions_and_types_from_db()
+
+    assert results is not None
+    assert len(results["column_descriptions"].keys()) > 0
+
+    # Test with filters
+    results = vectordb_driver.retrieve_descriptions_and_types_from_db(
+        db_name_filter=DEFAULT_DB_NAME,
+        table_name_filter=DEFAULT_TABLE_NAME,
+    )
+
+    assert results is not None
+    assert len(results["column_descriptions"].keys()) > 0
+
+    # Test with random filters that should not return any results
+    results = vectordb_driver.retrieve_descriptions_and_types_from_db(
+        db_name_filter="random_db",
+        table_name_filter="random_table",
+    )
+
+    assert results is None

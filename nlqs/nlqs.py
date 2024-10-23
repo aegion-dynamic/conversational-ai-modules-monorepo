@@ -189,10 +189,12 @@ class NLQS:
 
         # This is the standard workflow for the NLQS
 
-        # Check if the user requested columns exist
-        for column in summarized_input.user_requested_columns:
-            if column not in column_descriptions:
-                raise ValueError(f"Column {column} not found in the database.")
+        # TODO: We should reenable this
+        # # Check if the user requested columns exist
+        # for column in summarized_input.user_requested_columns:
+        #     if column not in column_descriptions:
+        #         raise ValueError(f"Column {column} not found in the database.")
+
         print("checking for user requested columns...")
         if summarized_input.user_requested_columns:
             numerical_data = summarized_input.numerical_data
