@@ -2,23 +2,15 @@
 Enhanced Medical Cannabis Recommendation System
 
 This module implements an improved version of the conversational AI system for providing
-medical cannabis recommendations. It uses the OpenAI API to generate responses and guide
-users through a structured conversation about their medical needs and potential cannabis
-treatments.
-
-Classes:
-    State: Enum representing different states of the conversation.
-    CannabisRecommendationSystem: Main class handling the recommendation logic.
-    CannabisRecommendationApp: Application class to run the recommendation system.
-
-Note: This version includes more comprehensive medical assessment and recommendation stages.
+medical cannabis recommendations with natural language query generation capabilities.
 """
 import openai
 from openai.types.chat.chat_completion_system_message_param import ChatCompletionSystemMessageParam
 from openai.types.chat.chat_completion_user_message_param import ChatCompletionUserMessageParam
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from enum import Enum, auto
+
 
 class State(Enum):
     """
@@ -28,6 +20,7 @@ class State(Enum):
     MEDICAL_ASSESSMENT = auto()
     RECOMMENDATION = auto()
     CONCLUSION = auto()
+
 
 class CannabisRecommendationSystem:
     """
@@ -47,75 +40,96 @@ class CannabisRecommendationSystem:
         self.context = {}
         self.conversation_history = []
         self.knowledge_base = self.load_knowledge_base()
+        self.generated_queries = []
         self.state_requirements = {
             State.INITIAL_INQUIRY: {
                 "required_info": ["is_medical_query", "main_symptom"],
-                "goal": "Understand the user's initial inquiry, overall context regarding health and cannabis, and identify the main symptom."
+                "goal": "Understand the user's initial inquiry and identify the main symptom.",
+                "initial_message": "Hi! I'm here to help recommend products for your needs. Could you tell me what brings you here today?"
             },
             State.MEDICAL_ASSESSMENT: {
                 "required_info": ["additional_symptoms", "symptom_severity", "symptom_duration", "previous_treatments", "medical_history", "lifestyle_factors"],
-                "goal": "Gather comprehensive information about the user's health condition, symptoms, and relevant factors."
+                "goal": "Gather comprehensive information about the user's health condition and symptoms."
             },
             State.RECOMMENDATION: {
                 "required_info": ["suitable_products", "usage_guidelines", "precautions", "expected_effects", "user_preferences"],
-                "goal": "Provide tailored cannabis product recommendations based on the user's health information and preferences, using the knowledge base."
+                "goal": "Generate natural language queries and provide user-friendly product recommendations."
             },
             State.CONCLUSION: {
                 "required_info": ["user_satisfaction", "understood_recommendations", "remaining_concerns", "next_steps"],
-                "goal": "Ensure the user's questions are answered, recommendations are understood, and provide clear next steps."
+                "goal": "Ensure recommendations are understood and provide clear next steps."
             }
         }
-        print(f"Initial State: {self.state.name}")
+        print(f"System initialized. Initial State: {self.state.name}")
 
     def load_knowledge_base(self) -> Dict[str, Any]:
         """
         Load the knowledge base with cannabis-related information.
-
-        Returns:
-            Dict[str, Any]: A dictionary containing various categories of cannabis information.
         """
-        return {
-            "product_types": {
-                "Oil drops": {"onset": "medium", "duration": "long"},
-                "Vape pen": {"onset": "quick", "duration": "short"},
-                "Edible": {"onset": "slow", "duration": "long"},
-                "Pill": {"onset": "medium", "duration": "medium"},
-                "Dried flower": {"onset": "quick", "duration": "medium"}
-            },
-            "effects": ["Calming", "Mood-lifting", "Balanced", "Sleep-promoting", "Energizing", "Relaxing"],
-            "onset_times": {
-                "Quick": "within minutes",
-                "Fast": "15-30 minutes",
-                "Medium": "30-60 minutes",
-                "Slow": "1-2 hours"
-            },
-            "durations": {
-                "Short": "1-2 hours",
-                "Medium": "3-6 hours",
-                "Long": "6-8 hours or more"
-            },
-            "use_times": ["Any time", "Daytime", "Nighttime"],
-            "common_issues": ["Pain", "Anxiety", "Insomnia", "Nausea", "Depression", "Inflammation", "Headache"],
-            "strengths": ["Mild", "Moderate", "Strong"],
-            "main_ingredients": {
-                "THC": {"effects": ["Euphoria", "Pain relief", "Appetite stimulation"]},
-                "CBD": {"effects": ["Anti-inflammatory", "Anxiety reduction", "Non-psychoactive"]},
-                "CBN": {"effects": ["Sedation", "Sleep aid"]},
-                "CBG": {"effects": ["Anti-inflammatory", "Neuroprotective"]},
-                "THCV": {"effects": ["Appetite suppression", "Energy boost"]}
+        try:
+            return {
+                "product_types": ["Oil", "Vape", "Edible", "Pill", "Flower"],
+                "effects": ["Calming", "Uplifting", "Balanced", "Sleep-aid", "Energizing", "Relaxing"],
+                "onset_times": ["Quick", "Fast", "Medium", "Slow"],
+                "durations": ["Short", "Medium", "Long"],
+                "use_times": ["Any time", "Daytime", "Nighttime"],
+                "common_issues": ["Pain", "Anxiety", "Sleep", "Nausea", "Mood", "Inflammation", "Headache"],
+                "strengths": ["Mild", "Moderate", "Strong"],
+                "active_compounds": ["Compound A", "Compound B", "Compound C", "Compound D", "Compound E"]
             }
-        }
+        except Exception as e:
+            print(f"Error loading knowledge base: {e}")
+            return {}
+
+    def generate_natural_language_queries(self) -> List[str]:
+        """
+        Generate natural language queries based on the gathered context.
+        """
+        try:
+            prompt = f"""
+            Generate 5 natural language queries based on the following user context:
+            {json.dumps(self.context)}
+            
+            Rules for query generation:
+            1. Use simple, clear language without medical jargon
+            2. Focus on the main symptom and user preferences
+            3. Include queries about product types, effects, and ratings
+            4. Make queries suitable for conversion to SQL/Cypher queries
+            5. Use the context information to make queries specific and relevant
+            
+            Format: Return only a JSON array of query strings
+            """
+
+            response = self.get_openai_response_text(prompt, "Generate natural language queries for product recommendations.")
+            if response:
+                try:
+                    queries = json.loads(response)
+                    if isinstance(queries, list):
+                        print(f"Generated {len(queries)} natural language queries")
+                        return queries
+                except json.JSONDecodeError:
+                    print("Failed to parse generated queries as JSON array")
+            return []
+        except Exception as e:
+            print(f"Error generating natural language queries: {e}")
+            return []
 
     def chat(self, user_input: str) -> Dict[str, Any]:
         """
         Process user input and generate a response.
-
-        Args:
-            user_input (str): The user's input message.
-
-        Returns:
-            Dict[str, Any]: A dictionary containing the bot's response and other relevant information.
         """
+        print(f"Processing user input: {user_input}")
+        
+        # Handle initial greeting
+        if len(self.conversation_history) == 0:
+            initial_message = self.state_requirements[State.INITIAL_INQUIRY]["initial_message"]
+            self.conversation_history.append(ChatCompletionSystemMessageParam(content=initial_message, role="assistant"))
+            return {
+                "bot_response": initial_message,
+                "follow_up_question": "What kind of help are you looking for today?",
+                "sample_options": ["I need help with pain management", "I'm having trouble sleeping", "I'm looking for stress relief"]
+            }
+
         self.conversation_history.append(ChatCompletionUserMessageParam(content=user_input, role="user"))
         response = self.process_input(user_input)
         self.conversation_history.append(ChatCompletionSystemMessageParam(content=response['bot_response'], role="assistant"))
@@ -124,29 +138,28 @@ class CannabisRecommendationSystem:
     def process_input(self, user_input: str) -> Dict[str, Any]:
         """
         Process the user input based on the current state and generate a response.
-
-        Args:
-            user_input (str): The user's input message.
-
-        Returns:
-            Dict[str, Any]: A dictionary containing the bot's response and other relevant information.
         """
         current_state_info = self.state_requirements[self.state]
-        print(f"\nCurrent State: {self.state.name}")
-        print(f"State Goal: {current_state_info['goal']}")
+        print(f"Processing input in state: {self.state.name}")
         
         response = self.get_llm_response(user_input, current_state_info)
-        self.context.update(response.get('extracted_info', {}))
+        if not response:
+            return self.get_fallback_response()
 
-        print("\nCurrent Context:")
-        print(json.dumps(self.context, indent=2))
+        self.context.update(response.get('extracted_info', {}))
+        print(f"Current context: {json.dumps(self.context, indent=2)}")
+        
+        if self.state == State.RECOMMENDATION:
+            queries = self.generate_natural_language_queries()
+            response['natural_language_queries'] = queries
+            self.generated_queries = queries
+            print(f"Generated queries: {json.dumps(queries, indent=2)}")
 
         missing_info = [info for info in current_state_info['required_info'] if info not in self.context]
-        print("\nMissing Information:")
-        print(json.dumps(missing_info, indent=2))
-
+        print(f"Missing info: {missing_info}")
+        
         if not missing_info or response.get('state_complete', False):
-            print(f"\nGoal Fulfilled: {current_state_info['goal']}")
+            print(f"State {self.state.name} complete")
             self.transition_to_next_state()
 
         if self.state == State.CONCLUSION:
@@ -154,102 +167,91 @@ class CannabisRecommendationSystem:
         
         return response
 
-    def get_llm_response(self, user_input: str, state_info: Dict[str, Any]) -> Dict[str, Any]:
+    def get_openai_response_text(self, prompt: str, system_message: str) -> Optional[str]:
         """
-        Generate a response using the OpenAI language model.
-
-        Args:
-            user_input (str): The user's input message.
-            state_info (Dict[str, Any]): Information about the current state.
-
-        Returns:
-            Dict[str, Any]: A dictionary containing the bot's response and other relevant information.
-        """
-        prompt = f"""
-        Analyze the following user input in the context of a medical cannabis recommendation system:
-        User input: "{user_input}"
-        Current state: {self.state.name}
-        State goal: {state_info['goal']}
-        Required information: {json.dumps(state_info['required_info'])}
-        Current context: {json.dumps(self.context)}
-        Knowledge base: {json.dumps(self.knowledge_base)}
-        
-        Tasks:
-        1. Extract all relevant information from the user input that aligns with the required information for this state.
-        2. Generate a concise, friendly response that addresses the user's input and moves towards fulfilling the state's goal.
-        3. If in the INITIAL_INQUIRY state, identify both the medical query and the main symptom.
-        4. If in the RECOMMENDATION state:
-           a. Generate 3 natural language queries based on the current context and user's symptoms. These queries should be formulated as questions that could be used to search a product database.
-           b. Use the information in the current context to make the queries more specific and relevant.
-           c. Avoid medical jargon and use simple, easy-to-understand language.
-           d. Ensure questions are directly related to items in the knowledge base.
-           e. Do not provide specific product recommendations or usage guidelines at this stage.
-        5. For all states, generate 1-2 natural language queries that could be relevant based on the current context and state. These should be more general for earlier states and become more specific as the conversation progresses.
-        6. If in the CONCLUSION state, summarize the conversation and provide next steps without asking follow-up questions.
-        7. For states other than RECOMMENDATION and CONCLUSION, if necessary, ask a single, focused follow-up question to gather missing information.
-        8. Determine if the current state's goal has been sufficiently met to transition to the next state.
-        9. Ensure the response covers all aspects of the current state's goal.
-
-        Provide a response in the following JSON format:
-        {{
-            "bot_response": "Your concise response to the user",
-            "extracted_info": {{"info_key": "value"}},
-            "follow_up_question": "A single follow-up question, if needed",
-            "natural_language_queries": ["Query 1", "Query 2", "Query 3"],
-            "state_complete": true/false
-        }}
-        """
-        return self.get_openai_response(prompt)
-
-    def transition_to_next_state(self):
-        """
-        Transition to the next state in the conversation flow.
-        """
-        state_order = list(State)
-        current_index = state_order.index(self.state)
-        if current_index < len(state_order) - 1:
-            self.state = state_order[current_index + 1]
-            print(f"\nTransitioning to: {self.state.name}")
-            print(f"New State Goal: {self.state_requirements[self.state]['goal']}")
-        else:
-            print("\nConversation complete.")
-
-    def get_openai_response(self, prompt: str) -> Dict[str, Any]:
-        """
-        Get a response from the OpenAI API.
-
-        Args:
-            prompt (str): The prompt to send to the OpenAI API.
-
-        Returns:
-            Dict[str, Any]: A dictionary containing the bot's response and other relevant information.
+        Get raw text response from OpenAI API with error handling.
         """
         try:
             response = self.client.chat.completions.create(
                 model="gpt-4",
                 messages=[
-                    ChatCompletionSystemMessageParam(content="You are a friendly medical cannabis recommendation assistant. Use simple language and keep responses concise.", role="system"),
+                    ChatCompletionSystemMessageParam(content=system_message, role="system"),
                     ChatCompletionUserMessageParam(content=prompt, role="user")
                 ],
-                temperature=0.7,
-                max_tokens=1000
+                temperature=0.7
             )
             
-            if response and response.choices:
-                content = response.choices[0].message.content
-                if content:
-                    return json.loads(content)
-                else:
-                    return {"bot_response": "I didn't understand that. Could you please rephrase?"}
-            else:
-                return {"bot_response": "There was a problem with my response. Please try again."}
-            
-        except json.JSONDecodeError as e:
-            print(f"JSONDecodeError: {e}")
-            return {"bot_response": "I'm having trouble understanding. Can you try again?"}
+            if response and response.choices and response.choices[0].message.content:
+                return response.choices[0].message.content
+            return None
         except Exception as e:
-            print(f"An unexpected error occurred: {e}")
-            return {"bot_response": "An unexpected error occurred. Please try again."}
+            print(f"Error getting OpenAI response: {e}")
+            return None
+
+    def get_llm_response(self, user_input: str, state_info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Generate a response using the OpenAI language model with improved error handling.
+        """
+        try:
+            prompt = f"""
+            Analyze the following user input for a product recommendation system:
+            User input: "{user_input}"
+            Current state: {self.state.name}
+            State goal: {state_info['goal']}
+            Required information: {json.dumps(state_info['required_info'])}
+            Current context: {json.dumps(self.context)}
+            Knowledge base: {json.dumps(self.knowledge_base)}
+            
+            Respond with a JSON object containing:
+            {{
+                "bot_response": "A friendly, helpful response using simple language",
+                "extracted_info": {{"key": "value"}},
+                "follow_up_question": "A natural follow-up question if needed",
+                "sample_options": ["Option 1", "Option 2", "Option 3"],
+                "state_complete": true/false
+            }}
+            """
+
+            response_text = self.get_openai_response_text(
+                prompt,
+                "You are a friendly product recommendation assistant. Use simple language."
+            )
+            
+            if response_text:
+                try:
+                    return json.loads(response_text)
+                except json.JSONDecodeError as e:
+                    print(f"JSON parsing error: {e}\nResponse text: {response_text}")
+                    return None
+            return None
+        except Exception as e:
+            print(f"Error in get_llm_response: {e}")
+            return None
+
+    def get_fallback_response(self) -> Dict[str, Any]:
+        """
+        Provide a fallback response when normal processing fails.
+        """
+        return {
+            "bot_response": "I'm having trouble understanding your input. Could you please clarify?",
+            "follow_up_question": "Is there a specific symptom or product you're looking for?",
+            "sample_options": ["Pain relief", "Stress relief", "Sleep aid"],
+            "conversation_complete": False
+        }
+
+    def transition_to_next_state(self):
+        """
+        Transition to the next state in the conversation.
+        """
+        if self.state == State.INITIAL_INQUIRY:
+            self.state = State.MEDICAL_ASSESSMENT
+        elif self.state == State.MEDICAL_ASSESSMENT:
+            self.state = State.RECOMMENDATION
+        elif self.state == State.RECOMMENDATION:
+            self.state = State.CONCLUSION
+        
+        print(f"Transitioned to next state: {self.state.name}")
+
 
 class CannabisRecommendationApp:
     """
@@ -259,50 +261,73 @@ class CannabisRecommendationApp:
     def __init__(self, api_key: str):
         """
         Initialize the CannabisRecommendationApp.
-
-        Args:
-            api_key (str): The API key for OpenAI.
         """
         self.system = CannabisRecommendationSystem(api_key)
+        print("Application initialized")
 
     def run(self):
         """
-        Run the Cannabis Recommendation Application, handling user interactions.
+        Run the Cannabis Recommendation Application.
         """
-        print("Welcome to the Medical Cannabis Recommendation Assistant!")
+        print("Welcome to the Product Recommendation Assistant!")
+        
         while True:
-            user_input = input("\nYou: ")
-            if user_input.lower() in ['exit', 'quit', 'bye']:
-                print("Thank you for using the Medical Cannabis Recommendation Assistant. Goodbye!")
+            try:
+                user_input = input("\nYou: ").strip()
+                if not user_input:
+                    print("Please type something to continue.")
+                    continue
+                    
+                if user_input.lower() in ['exit', 'quit', 'bye']:
+                    print("Thank you for using the Product Recommendation Assistant. Goodbye!")
+                    break
+
+                response = self.system.chat(user_input)
+                print(f"\nAssistant: {response['bot_response']}")
+                
+                if self.system.state == State.RECOMMENDATION and 'natural_language_queries' in response:
+                    print("\nGenerated Queries:")
+                    for i, query in enumerate(response['natural_language_queries'], 1):
+                        print(f"{i}. {query}")
+
+                if 'follow_up_question' in response and self.system.state != State.CONCLUSION:
+                    print(f"\n{response['follow_up_question']}")
+                    if 'sample_options' in response:
+                        print("\nSample responses:")
+                        for i, option in enumerate(response['sample_options'], 1):
+                            print(f"{i}. {option}")
+
+                if response.get('conversation_complete', False):
+                    print("\nThank you for using the Product Recommendation Assistant. Take care!")
+                    break
+
+            except KeyboardInterrupt:
+                print("\nGoodbye! Thank you for using the Product Recommendation Assistant.")
                 break
-
-            response = self.system.chat(user_input)
-            print(f"\nAssistant: {response['bot_response']}")
-            print(f"Current State: {self.system.state.name}")
-
-            if 'natural_language_queries' in response:
-                print("\nBased on our conversation, here are some queries we could use to find relevant information:")
-                for i, query in enumerate(response['natural_language_queries'], 1):
-                    print(f"{i}. {query}")
-
-            if 'follow_up_question' in response and self.system.state != State.CONCLUSION:
-                print(f"{response['follow_up_question']}")
-
-            if response.get('conversation_complete', False):
-                print("\nThank you for using the Medical Cannabis Recommendation Assistant. Take care!")
-                break
-
-from dotenv import load_dotenv
-import os
+            except Exception as e:
+                print(f"Error in conversation loop: {e}")
+                print("I apologize, but something went wrong. Let's continue our conversation.")
 
 def main():
     """
     Main function to run the Cannabis Recommendation Application.
     """
-    load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY")
-    app = CannabisRecommendationApp(api_key)
-    app.run()
+    try:
+        from dotenv import load_dotenv
+        import os
+        
+        load_dotenv()
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            print("API key not found in environment variables")
+            raise ValueError("API key not found")
+            
+        print("Starting application")
+        app = CannabisRecommendationApp(api_key)
+        app.run()
+    except Exception as e:
+        print(f"Application error: {e}")
+        print("An error occurred while starting the application. Please check your configuration.")
 
 if __name__ == "__main__":
     main()
