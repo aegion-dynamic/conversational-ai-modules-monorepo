@@ -65,6 +65,13 @@ class ColumnType(Enum):
     DESCRIPTIVE = "descriptive"
     IDENTIFIER = "identifier"
 
+    @staticmethod
+    def from_string(s: str) -> ColumnType:
+        try:
+            return ColumnType(s)
+        except ValueError:
+            raise ValueError(f"Invalid column type: {s}. Must be one of {[e.value for e in ColumnType]}")
+
 
 class DataCollectionMetadata(TypedDict):
     db_name: str
@@ -130,15 +137,18 @@ def create_chroma_client(chroma_config: ChromaDBConfig) -> ClientAPI:
 
 
 class VectorDBDriver:
-    def __init__(self, chroma_config: ChromaDBConfig):
+    def __init__(self, chroma_config: ChromaDBConfig, embedding_function: Callable[[str], List[float]]):
         """Constructor for the VectorDBDriver
 
         Args:
             chroma_config (ChromaDBConfig): ChromaDB configuration
+            embedding_function (Callable[[str], List[float]]): Function to generate embeddings from a string
         """
         self.chroma_config = chroma_config
 
         self.chroma_client = create_chroma_client(chroma_config)
+
+        self.embedding_function = embedding_function
 
         if self.check_nlqs_collections_exists():
             print("NLQS collections already exist.")
@@ -267,7 +277,12 @@ class VectorDBDriver:
             return True
 
     def get_closest_column_from_description(
-        self, approximate_column_name: str, users_description: str, sample_data_strings: List[str]
+        self,
+        approximate_column_name: str,
+        users_description: str,
+        sample_data_strings: List[str],
+        database_name: str,
+        table_name: str,
     ) -> Tuple[str, ColumnType]:
         """Get the closest column name from the description provided by the user.
 
@@ -298,9 +313,19 @@ class VectorDBDriver:
         """
 
         # TODO: Figure out which embedding to use
+        embedding = self.embedding_function(description_package)
 
         # Use the formatted string to find the closest column
-        results = column_info_collection.query(query_texts=[description_package], n_results=1)
+        results = column_info_collection.query(
+            query_embeddings=[embedding],
+            where={
+                "$and": [
+                    {"table_name": {"$eq": table_name}},
+                    {"db_name": {"$eq": database_name}},
+                ]
+            },
+            n_results=1,
+        )
 
         if not results:
             raise ValueError(f"No matching column found for {approximate_column_name}.")
@@ -311,13 +336,14 @@ class VectorDBDriver:
 
         # TODO: Figure out if this is the correct way to get the closest column name
         closest_column_name = metadatas[0][0]["column_name"]
+        column_type = metadatas[0][0]["column_type"]
 
         if type(closest_column_name) is not str:
             raise ValueError(
                 f"Closest column name is not a string for {approximate_column_name}. Extracted Info: {closest_column_name}."
             )
 
-        return closest_column_name, self.get_column_type(closest_column_name)
+        return closest_column_name, ColumnType(column_type)
 
     def get_closest_data_from_description(
         self,
@@ -359,17 +385,38 @@ class VectorDBDriver:
         # Return the lookup key, column value and the actual data
         return ret
 
-    def get_column_type(self, column_name: str) -> ColumnType:
-        """Get the column type for the given column name.
+    def get_column_type(self, column_name: str, table_name: str, db_name: str) -> ColumnType:
+        """Get the column type from the database.
 
         Args:
             column_name (str): Column name
+            table_name (str): Table name
+            db_name (str): Database name
 
         Returns:
             ColumnType: Column type
         """
+        # Query the column info collection to get the column type
+        results = self.column_info_collection.query(
+            where={
+                "$and": [
+                    {"column_name": {"$eq": column_name}},
+                    {"table_name": {"$eq": table_name}},
+                    {"db_name": {"$eq": db_name}},
+                ]
+            }
+        )
 
-        raise NotImplementedError("This method is not implemented yet.")
+        if not results["documents"]:
+            raise ValueError(f"Column {column_name} not found in the database.")
+
+        metadatas: List[List[Mapping[str, str | int | float | bool]]] | None = results["metadatas"]
+        if not metadatas:
+            raise ValueError(f"No metadata found in chromadb query result for {column_name}.")
+
+        column_type = metadatas[0][0]["column_type"]
+
+        return ColumnType(column_type)
 
     def store_column_info_in_db(
         self,

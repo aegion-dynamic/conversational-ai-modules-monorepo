@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Tuple, Union
 
 import chromadb
 from langchain_openai import ChatOpenAI
+from langchain_openai import OpenAIEmbeddings
 from pydantic import SecretStr
 
 from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
@@ -60,10 +61,18 @@ class NLQS:
 
         # Create the llm object
         # Initializes the ChatOpenAI LLM model
+        # TODO: Rearchitect this so that we can switch models
         self.llm = ChatOpenAI(temperature=0, model="gpt-4-turbo", api_key=SecretStr(OPENAI_API_KEY), max_tokens=1000)
 
+        # Initialize the Embedding model
+        # TODO: Rearchitect this so that we can switch models
+        embedding_model = OpenAIEmbeddings(api_key=SecretStr(OPENAI_API_KEY), model="text-embedding-ada-002")
+
+        # Create an embedding function
+        embedding_function = embedding_model.embed_query
+
         self.chroma_config = chroma_config
-        self.vectordb_driver = VectorDBDriver(chroma_config)
+        self.vectordb_driver = VectorDBDriver(chroma_config, embedding_function=embedding_function)
 
         self.table_name = connection_config.dataset_table_name
         self.uri_column = connection_config.uri_column

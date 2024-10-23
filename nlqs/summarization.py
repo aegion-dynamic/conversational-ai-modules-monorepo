@@ -8,6 +8,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI, OpenAI
 from sqlalchemy import column
 
+from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME
 from nlqs.vectordb_driver import ColumnType, DataCollectionMetadata, VectorDBDriver
 from utils.json_outputs import validate_llm_output_keys
 
@@ -307,6 +308,9 @@ def summarize(
     descriptive_data = {}
     identifier_data = {}
 
+    # TODO: In the future this should also find the corresponding table from the databse
+    # For now, we will use the default table and default db
+
     # Go through each of the qualitative and quantitative maps check if the column is present in the data
     for column_name, description in summarized_input_dict.get("quantitative_data", {}).items():
         if column_name not in column_descriptions_dictionary:
@@ -314,6 +318,8 @@ def summarize(
                 approximate_column_name=column_name,
                 users_description=description,
                 sample_data_strings=[],
+                database_name=DEFAULT_DB_NAME,
+                table_name=DEFAULT_TABLE_NAME,
             )
 
             if closest_column_name not in column_descriptions_dictionary:
@@ -341,6 +347,8 @@ def summarize(
                 approximate_column_name=column_name,
                 users_description=description,
                 sample_data_strings=[],
+                database_name=DEFAULT_DB_NAME,
+                table_name=DEFAULT_TABLE_NAME,
             )
 
             if closest_column_name not in column_descriptions_dictionary:
@@ -384,6 +392,8 @@ def get_validated_user_requested_columns(
 
     Args:
         summazied_user_requested_columns (List[str]): The user requested columns.
+        table_name (str): The table name.
+        db_name (str): The database name.
 
     Returns:
         List[str]: A list of valid user requested columns.
@@ -406,7 +416,11 @@ def get_validated_user_requested_columns(
 
         # If the column does not exist, find the closest column name
         closest_column_name, column_type = vectordb_driver.get_closest_column_from_description(
-            approximate_column_name=column_name, users_description="", sample_data_strings=[]
+            approximate_column_name=column_name,
+            users_description="",
+            sample_data_strings=[],
+            database_name=db_name,
+            table_name=table_name,
         )
 
         # If the closest column name is not found, print a warning and continue to the next column

@@ -1,13 +1,17 @@
 import sqlite3
 from pathlib import Path
+from typing import Callable, List
 from unittest.mock import Mock, patch
 
+from langchain_openai import OpenAIEmbeddings
 import pandas as pd
 import psycopg2
+from pydantic import SecretStr
 import pytest
 
 from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
+from nlqs.parameters import OPENAI_API_KEY
 from nlqs.vectordb_driver import ChromaDBConfig, VectorDBDriver
 
 
@@ -142,7 +146,7 @@ def chroma_config():
 
 
 @pytest.fixture(scope="session")
-def vectordb_driver(chroma_config):
+def vectordb_driver(chroma_config, embedding_function):
 
     VectorDBDriver.purge_nlqs_vectordb(chroma_config)
 
@@ -151,6 +155,7 @@ def vectordb_driver(chroma_config):
     # Load the column and data description datasets
     column_info_df = pd.read_csv("./nlqs/tests/data/column_descriptions_with_embeddings.tsv", sep="\t")
     data_info_df = pd.read_csv("./nlqs/tests/data/data_descriptions_with_embeddings.tsv", sep="\t")
+    table_info_df = pd.read_csv("./nlqs/tests/data/table_descriptions_with_embeddings.tsv", sep="\t")
 
     VectorDBDriver.populate_nlqs_column_info(
         chroma_config,
@@ -162,6 +167,26 @@ def vectordb_driver(chroma_config):
         data_info_df,
     )
 
-    vectordb_driver = VectorDBDriver(chroma_config)
+    VectorDBDriver.populate_nlqs_table_info(
+        chroma_config,
+        table_info_df,
+    )
+
+    vectordb_driver = VectorDBDriver(chroma_config, embedding_function)
 
     return vectordb_driver
+
+
+@pytest.fixture(scope="session")
+def embedding_function() -> (
+    Callable[[str], List[float]]
+):  # -> Callable[..., List[float]]:# -> Callable[..., List[float]]:
+
+    # Initialize the Embedding model
+    # TODO: Rearchitect this so that we can switch models
+    embedding_model = OpenAIEmbeddings(api_key=SecretStr(OPENAI_API_KEY), model="text-embedding-ada-002")
+
+    # Create an embedding function
+    embedding_function = embedding_model.embed_query
+
+    return embedding_function
