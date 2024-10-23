@@ -438,17 +438,35 @@ class VectorDBDriver:
     @staticmethod
     def populate_nlqs_dataset_info(
         chroma_config: ChromaDBConfig,
-        dataset_info: DataFrame,
+        dataset_info_df: DataFrame,
         batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
-        """Populate the NLQS VectorDB collections
+        """Populate the NLQS VectorDB dataset collection
 
         Args:
             chroma_config (ChromaDBConfig): ChromaDB configuration
-            column_info (DataFrame): Column information
-            dataset_info (DataFrame): Dataset information
+            dataset_info_df (DataFrame): Dataset information
+            batch_size (int, optional): In what quantities should they be populated. Defaults to DEFAULT_BATCH_SIZE.
+
+        Raises:
+            ValueError: If the column is not found in the DataFrame
         """
 
+        # Test to ensure all the columns are present in the table_info_df
+        colums_to_check = [
+            "description",
+            "db_name",
+            "table_name",
+            "lookup_key_column_name",
+            "lookup_key_column_value",
+            "embedding",
+        ]
+
+        for column in colums_to_check:
+            if column not in dataset_info_df.columns:
+                raise ValueError(f"Column '{column}' not found in the DataFrame. Cannot initialize the data")
+
+        # Create a chroma client
         chroma_client = create_chroma_client(chroma_config)
 
         # Create the collection if it does not exist
@@ -457,19 +475,19 @@ class VectorDBDriver:
         print("Populating the dataset collection...")
 
         # Populate the dataset collection
-        ids = [str(i + 1) for i in range(len(dataset_info))]
+        ids = [str(i + 1) for i in range(len(dataset_info_df))]
 
-        for index in tqdm(range(0, len(dataset_info), batch_size)):
-            documents = dataset_info["description"].astype(str).tolist()[index : index + batch_size]
-            db_names = dataset_info["db_name"].astype(str).tolist()[index : index + batch_size]
-            table_names = dataset_info["table_name"].astype(str).tolist()[index : index + batch_size]
+        for index in tqdm(range(0, len(dataset_info_df), batch_size)):
+            documents = dataset_info_df["description"].astype(str).tolist()[index : index + batch_size]
+            db_names = dataset_info_df["db_name"].astype(str).tolist()[index : index + batch_size]
+            table_names = dataset_info_df["table_name"].astype(str).tolist()[index : index + batch_size]
             lookup_key_column_names = (
-                dataset_info["lookup_key_column_name"].astype(str).tolist()[index : index + batch_size]
+                dataset_info_df["lookup_key_column_name"].astype(str).tolist()[index : index + batch_size]
             )
             lookup_key_column_values = (
-                dataset_info["lookup_key_column_value"].astype(str).tolist()[index : index + batch_size]
+                dataset_info_df["lookup_key_column_value"].astype(str).tolist()[index : index + batch_size]
             )
-            embeddings = dataset_info["embedding"].tolist()[index : index + batch_size]
+            embeddings = dataset_info_df["embedding"].tolist()[index : index + batch_size]
 
             # Create metadata objects
             metadatas = []
@@ -494,17 +512,27 @@ class VectorDBDriver:
     @staticmethod
     def populate_nlqs_table_info(
         chroma_config: ChromaDBConfig,
-        table_info: DataFrame,
+        table_info_df: DataFrame,
         batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
-        """Populate the NLQS VectorDB collections
+        """Populate the NLQS VectorDB table description collection
 
         Args:
             chroma_config (ChromaDBConfig): ChromaDB configuration
-            column_info (DataFrame): Column information
-            dataset_info (DataFrame): Dataset information
-        """
+            table_info_df (DataFrame): Table information
+            batch_size (int, optional): In what quantities should they be populated. Defaults to DEFAULT_BATCH_SIZE.
 
+        Raises:
+            ValueError: If the column is not found in the DataFrame
+        """
+        # Test to ensure all the columns are present in the table_info_df
+        colums_to_check = ["description", "db_name", "table_name", "embedding"]
+
+        for column in colums_to_check:
+            if column not in table_info_df.columns:
+                raise ValueError(f"Column '{column}' not found in the DataFrame. Cannot initialize the data")
+
+        # Create a chroma client
         chroma_client = create_chroma_client(chroma_config)
 
         # Create the collection if it does not exist
@@ -513,13 +541,13 @@ class VectorDBDriver:
         print("Populating the table description collection...")
 
         # Populate the table description collection
-        ids = [str(i + 1) for i in range(len(table_info))]
+        ids = [str(i + 1) for i in range(len(table_info_df))]
 
-        for index in tqdm(range(0, len(table_info), batch_size)):
-            documents = table_info["description"].astype(str).tolist()[index : index + batch_size]
-            db_names = table_info["db_name"].astype(str).tolist()[index : index + batch_size]
-            table_names = table_info["table_name"].astype(str).tolist()[index : index + batch_size]
-            embeddings = table_info["embedding"].tolist()[index : index + batch_size]
+        for index in tqdm(range(0, len(table_info_df), batch_size)):
+            documents = table_info_df["description"].astype(str).tolist()[index : index + batch_size]
+            db_names = table_info_df["db_name"].astype(str).tolist()[index : index + batch_size]
+            table_names = table_info_df["table_name"].astype(str).tolist()[index : index + batch_size]
+            embeddings = table_info_df["embedding"].tolist()[index : index + batch_size]
 
             # Create metadata objects
             metadatas = []
@@ -537,16 +565,26 @@ class VectorDBDriver:
     @staticmethod
     def populate_nlqs_column_info(
         chroma_config: ChromaDBConfig,
-        column_info: DataFrame,
+        column_info_df: DataFrame,
         batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
-        """Populate the NLQS VectorDB collections
+        """Populate the NLQS VectorDB column info collection
 
         Args:
             chroma_config (ChromaDBConfig): ChromaDB configuration
-            column_info (DataFrame): Column information
-            dataset_info (DataFrame): Dataset information
+            column_info_df (DataFrame): Column information
+            batch_size (int, optional): In what quantities should they be populated. Defaults to DEFAULT_BATCH_SIZE.
+
+        Raises:
+            ValueError: If the column is not found in the DataFrame
         """
+        # Test to ensure all the columns are present in the column_info_df
+
+        colums_to_check = ["description", "db_name", "table_name", "column_name", "column_type", "embedding"]
+
+        for column in colums_to_check:
+            if column not in column_info_df.columns:
+                raise ValueError(f"Column '{column}' not found in the DataFrame. Cannot initialize the data")
 
         chroma_client = create_chroma_client(chroma_config)
 
@@ -556,15 +594,15 @@ class VectorDBDriver:
         print("Populating the column info collection...")
 
         # Ids of the rows
-        ids = [str(i + 1) for i in range(len(column_info))]
+        ids = [str(i + 1) for i in range(len(column_info_df))]
 
-        for index in tqdm(range(0, len(column_info), batch_size)):
-            descriptions = column_info["description"].astype(str).tolist()[index : index + batch_size]
-            db_names = column_info["db_name"].astype(str).tolist()[index : index + batch_size]
-            table_names = column_info["table_name"].astype(str).tolist()[index : index + batch_size]
-            column_names = column_info["column_name"].astype(str).tolist()[index : index + batch_size]
-            column_types = column_info["column_type"].astype(str).tolist()[index : index + batch_size]
-            embeddings = column_info["embedding"].tolist()[index : index + batch_size]
+        for index in tqdm(range(0, len(column_info_df), batch_size)):
+            descriptions = column_info_df["description"].astype(str).tolist()[index : index + batch_size]
+            db_names = column_info_df["db_name"].astype(str).tolist()[index : index + batch_size]
+            table_names = column_info_df["table_name"].astype(str).tolist()[index : index + batch_size]
+            column_names = column_info_df["column_name"].astype(str).tolist()[index : index + batch_size]
+            column_types = column_info_df["column_type"].astype(str).tolist()[index : index + batch_size]
+            embeddings = column_info_df["embedding"].tolist()[index : index + batch_size]
 
             # Create metadata objects
             metadatas = []
