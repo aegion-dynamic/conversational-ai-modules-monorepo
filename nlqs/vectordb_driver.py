@@ -38,6 +38,7 @@ Table Descriptions Collection (name: nlqs_table_descriptions)
 
 from __future__ import annotations
 
+import collections
 from curses import meta
 from dataclasses import dataclass
 from enum import Enum
@@ -49,6 +50,7 @@ from chromadb.api import ClientAPI
 from chromadb.config import Settings
 from pandas import DataFrame
 from tqdm import tqdm
+import ast
 
 DEFAULT_COLUMN_INFO_COLLECTION_NAME = "nlqs_column_info"
 DEFAULT_DATASET_COLLECTION_NAME = "nlqs_descriptive_data"
@@ -398,21 +400,21 @@ class VectorDBDriver:
         """
 
         # Create a new driver instance
-        driver = VectorDBDriver(chroma_config)
+        chroma_client = create_chroma_client(chroma_config)
 
         # Create the NLQS collections
         try:
-            driver.chroma_client.create_collection(chroma_config.column_info_collection_name)
+            chroma_client.create_collection(chroma_config.column_info_collection_name)
         except Exception as e:
             print(f"Error creating NLQS collections: {e}")
 
         try:
-            driver.chroma_client.create_collection(chroma_config.dataset_collection_name)
+            chroma_client.create_collection(chroma_config.dataset_collection_name)
         except Exception as e:
             print(f"Error creating NLQS collections: {e}")
 
         try:
-            driver.chroma_client.create_collection(chroma_config.table_description_collection_name)
+            chroma_client.create_collection(chroma_config.table_description_collection_name)
         except Exception as e:
             print(f"Error creating NLQS collections: {e}")
 
@@ -426,12 +428,17 @@ class VectorDBDriver:
             chroma_config (ChromaDBConfig): ChromaDB configuration
         """
 
-        driver = VectorDBDriver(chroma_config)
+        chroma_client = create_chroma_client(chroma_config)
 
+        # Get Collection names
+        collections = [col.name for col in chroma_client.list_collections()]
         try:
-            driver.chroma_client.delete_collection(chroma_config.column_info_collection_name)
-            driver.chroma_client.delete_collection(chroma_config.dataset_collection_name)
-            driver.chroma_client.delete_collection(chroma_config.table_description_collection_name)
+            if chroma_config.column_info_collection_name in collections:
+                chroma_client.delete_collection(chroma_config.column_info_collection_name)
+            if chroma_config.dataset_collection_name in collections:
+                chroma_client.delete_collection(chroma_config.dataset_collection_name)
+            if chroma_config.table_description_collection_name in collections:
+                chroma_client.delete_collection(chroma_config.table_description_collection_name)
         except Exception as e:
             print(f"Error purging NLQS collections: {e}")
 
@@ -470,7 +477,7 @@ class VectorDBDriver:
         chroma_client = create_chroma_client(chroma_config)
 
         # Create the collection if it does not exist
-        collection = chroma_client.create_collection(chroma_config.dataset_collection_name, get_or_create=True)
+        collection = chroma_client.get_collection(chroma_config.dataset_collection_name)
 
         print("Populating the dataset collection...")
 
@@ -488,6 +495,9 @@ class VectorDBDriver:
                 dataset_info_df["lookup_key_column_value"].astype(str).tolist()[index : index + batch_size]
             )
             embeddings = dataset_info_df["embedding"].tolist()[index : index + batch_size]
+
+            # Convert each string in the embeddings list to a list of floats
+            embeddings = [ast.literal_eval(embedding) for embedding in embeddings]
 
             # Create metadata objects
             metadatas = []
@@ -508,6 +518,9 @@ class VectorDBDriver:
                 embeddings=embeddings,
                 metadatas=metadatas,
             )
+
+        # Print out the final count
+        print(f"Number of items added to the collection: {collection.count()}")
 
     @staticmethod
     def populate_nlqs_table_info(
@@ -536,7 +549,7 @@ class VectorDBDriver:
         chroma_client = create_chroma_client(chroma_config)
 
         # Create the collection if it does not exist
-        collection = chroma_client.create_collection(chroma_config.dataset_collection_name, get_or_create=True)
+        collection = chroma_client.get_collection(chroma_config.table_description_collection_name)
 
         print("Populating the table description collection...")
 
@@ -548,6 +561,9 @@ class VectorDBDriver:
             db_names = table_info_df["db_name"].astype(str).tolist()[index : index + batch_size]
             table_names = table_info_df["table_name"].astype(str).tolist()[index : index + batch_size]
             embeddings = table_info_df["embedding"].tolist()[index : index + batch_size]
+
+            # Convert each string in the embeddings list to a list of floats
+            embeddings = [ast.literal_eval(embedding) for embedding in embeddings]
 
             # Create metadata objects
             metadatas = []
@@ -561,6 +577,9 @@ class VectorDBDriver:
                 embeddings=embeddings,
                 metadatas=metadatas,
             )
+
+        # Print out the final count
+        print(f"Number of items added to the collection: {collection.count()}")
 
     @staticmethod
     def populate_nlqs_column_info(
@@ -589,7 +608,7 @@ class VectorDBDriver:
         chroma_client = create_chroma_client(chroma_config)
 
         # Create the collection if it does not exist
-        collection = chroma_client.create_collection(chroma_config.dataset_collection_name, get_or_create=True)
+        collection = chroma_client.get_collection(chroma_config.column_info_collection_name)
 
         print("Populating the column info collection...")
 
@@ -603,6 +622,9 @@ class VectorDBDriver:
             column_names = column_info_df["column_name"].astype(str).tolist()[index : index + batch_size]
             column_types = column_info_df["column_type"].astype(str).tolist()[index : index + batch_size]
             embeddings = column_info_df["embedding"].tolist()[index : index + batch_size]
+
+            # Convert each string in the embeddings list to a list of floats
+            embeddings = [ast.literal_eval(embedding) for embedding in embeddings]
 
             # Create metadata objects
             metadatas = []
@@ -623,3 +645,6 @@ class VectorDBDriver:
                 embeddings=embeddings,
                 metadatas=metadatas,
             )
+
+        # Print out the final count
+        print(f"Number of items added to the collection: {collection.count()}")

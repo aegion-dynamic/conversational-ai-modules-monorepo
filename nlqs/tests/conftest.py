@@ -2,6 +2,7 @@ import sqlite3
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import pandas as pd
 import psycopg2
 import pytest
 
@@ -135,18 +136,32 @@ def patch_psycopg2_connect(mock_connection):
         yield mock
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def chroma_config():
-    return ChromaDBConfig(
-        column_info_collection_name="test_column_info",
-        dataset_collection_name="test_dataset_info",
-        persist_path=Path("./test_chroma"),
-        host="localhost",
-        port=8000,
-        is_local=True,
+    return ChromaDBConfig(persist_path=Path("./chroma"), is_local=True)
+
+
+@pytest.fixture(scope="session")
+def vectordb_driver(chroma_config):
+
+    VectorDBDriver.purge_nlqs_vectordb(chroma_config)
+
+    VectorDBDriver.initialize_nlqs_vectordb(chroma_config)
+
+    # Load the column and data description datasets
+    column_info_df = pd.read_csv("./nlqs/tests/data/column_descriptions_with_embeddings.tsv", sep="\t")
+    data_info_df = pd.read_csv("./nlqs/tests/data/data_descriptions_with_embeddings.tsv", sep="\t")
+
+    VectorDBDriver.populate_nlqs_column_info(
+        chroma_config,
+        column_info_df,
     )
 
+    VectorDBDriver.populate_nlqs_dataset_info(
+        chroma_config,
+        data_info_df,
+    )
 
-@pytest.fixture
-def vectordb_driver(chroma_config):
-    return VectorDBDriver(chroma_config)
+    vectordb_driver = VectorDBDriver(chroma_config)
+
+    return vectordb_driver
