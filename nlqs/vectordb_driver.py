@@ -20,6 +20,7 @@ Dataset Collection (name: nlqs_descriptive_data)
     "metadata": {
         "db_name": "Location of the original database",
         "table_name": "Location of the original table",
+        "column_name": "Column name",
         "lookup_key_column_name": "Primary key column name",
         "lookup_key_column_value": "Primary key column value
     }
@@ -85,6 +86,7 @@ class ColumnDescriptions(TypedDict):
 class DataCollectionMetadata(TypedDict):
     db_name: str
     table_name: str
+    column_name: str
     lookup_key_column_name: str
     lookup_key_column_value: str
 
@@ -450,7 +452,7 @@ class VectorDBDriver:
                 "$and": [
                     {"db_name": {"$eq": database_name}},
                     {"table_name": {"$eq": table_name}},
-                    {"lookup_key_column_name": {"$eq": column_name}},
+                    {"column_name": {"$eq": column_name}},
                 ]
             },
             n_results=5,
@@ -522,7 +524,9 @@ class VectorDBDriver:
 
         raise NotImplementedError("This method is not implemented yet.")
 
-    def get_id_list_from_descriptions(self, descriptions: Dict[str, str], table_name: str, db_name: str) -> Dict[str, Any]:
+    def get_id_list_from_descriptions(
+        self, descriptions: Dict[str, str], table_name: str, db_name: str
+    ) -> Dict[str, Any]:
         """Get the list of IDs from the descriptions.
 
         Args:
@@ -627,6 +631,7 @@ class VectorDBDriver:
             "description",
             "db_name",
             "table_name",
+            "column_name",
             "lookup_key_column_name",
             "lookup_key_column_value",
             "embedding",
@@ -651,6 +656,7 @@ class VectorDBDriver:
             documents = dataset_info_df["description"].astype(str).tolist()[index : index + batch_size]
             db_names = dataset_info_df["db_name"].astype(str).tolist()[index : index + batch_size]
             table_names = dataset_info_df["table_name"].astype(str).tolist()[index : index + batch_size]
+            column_names = dataset_info_df["column_name"].astype(str).tolist()[index : index + batch_size]
             lookup_key_column_names = (
                 dataset_info_df["lookup_key_column_name"].astype(str).tolist()[index : index + batch_size]
             )
@@ -669,6 +675,7 @@ class VectorDBDriver:
                     {
                         "db_name": db_names[i],
                         "table_name": table_names[i],
+                        "column_name": column_names[i],
                         "lookup_key_column_name": lookup_key_column_names[i],
                         "lookup_key_column_value": lookup_key_column_values[i],
                     }
