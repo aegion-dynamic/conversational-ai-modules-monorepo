@@ -2,7 +2,20 @@ from typing import Dict, List
 from chromadb import Collection, QueryResult
 
 
-def construct_quantitaive_search_query_fragment(quantitaive_data: Dict[str, str]) -> str:
+def join_fragments(fragments: List[str], joiner: str = "AND") -> str:
+    """Joins a list of query fragments into a single query.
+
+    Args:
+        fragments (List[str]): A list of query fragments to join.
+        joiner (str, optional): The joiner to use between fragments. Defaults to "AND".
+
+    Returns:
+        str: The joined query.
+    """
+    return f" {joiner} ".join(fragments)
+
+
+def construct_quantitaive_search_query_fragments(quantitaive_data: Dict[str, str]) -> List[str]:
     """Creates an SQL query from a dictionary of quantitative data.
 
     Args:
@@ -12,23 +25,28 @@ def construct_quantitaive_search_query_fragment(quantitaive_data: Dict[str, str]
         str: The generated SQL query fragment.
     """
     if not quantitaive_data:
-        return ""  # Return an empty string if the dictionary is empty
+        return []  # Return an empty string if the dictionary is empty
 
     query_parts = []
     for column, condition in quantitaive_data.items():
+
+        # Remove the whitespace from the condition
+        condition = condition.replace(" ", "")
+
         # Handle different comparison operators
-        if "<" in condition:
-            operator = "<"
-        elif ">" in condition:
-            operator = ">"
-        elif "<=" in condition:
+        if "<=" in condition:
             operator = "<="
         elif ">=" in condition:
             operator = ">="
+        elif "<" in condition:
+            operator = "<"
+        elif ">" in condition:
+            operator = ">"
         elif "=" in condition:
             operator = "="
         else:
-            operator = "LIKE"  # Default to LIKE for other conditions
+            print(f"Warning ! : Invalid condition: {condition}")
+            continue
 
         # Extract the value from the condition
         value = condition.replace(operator, "").strip()
@@ -37,13 +55,10 @@ def construct_quantitaive_search_query_fragment(quantitaive_data: Dict[str, str]
         query_part = f"{column} {operator} {value}"
         query_parts.append(query_part)
 
-    # Combine the query parts with AND
-    query_constraints = " AND ".join(query_parts)
-
-    return query_constraints
+    return query_parts
 
 
-def construct_categorical_search_query_fragment(categorical_data: Dict[str, str]) -> str:
+def construct_categorical_search_query_fragments(categorical_data: Dict[str, str]) -> List[str]:
     """Creates an SQL query from a dictionary of categorical data.
 
     Args:
@@ -53,7 +68,7 @@ def construct_categorical_search_query_fragment(categorical_data: Dict[str, str]
         str: The generated SQL query fragment.
     """
     if not categorical_data:
-        return ""  # Return an empty string if the dictionary is empty
+        return []  # Return an empty string if the dictionary is empty
 
     query_parts = []
     for column, condition in categorical_data.items():
@@ -62,9 +77,51 @@ def construct_categorical_search_query_fragment(categorical_data: Dict[str, str]
         query_parts.append(query_part)
 
     # Combine the query parts with AND
-    query_constraints = " AND ".join(query_parts)
+    return query_parts
 
-    return query_constraints
+
+def construct_identifier_search_query_fragments(identifier_data: Dict[str, str]) -> List[str]:
+    """Creates an SQL query from a dictionary of identifier data.
+
+    Args:
+        identifier_data (dict): A dictionary of identifier data in the form {'column_name': 'condition'}.
+
+    Returns:
+        str: The generated SQL query fragment.
+    """
+    if not identifier_data:
+        return []  # Return an empty string if the dictionary is empty
+
+    query_parts = []
+    for column, condition in identifier_data.items():
+        # Construct the query part
+        query_part = f"{column} = {condition}"
+        query_parts.append(query_part)
+
+    # Combine the query parts with AND
+    return query_parts
+
+
+def construct_descriptive_search_query_fragments(lookup_dict: Dict[str, List[str]]) -> List[str]:
+    """Creates an SQL query from a dictionary of descriptive data.
+
+    Args:
+        lookup_dict (Dict[str, List[str]]): A dictionary of descriptive data in the form {'column_name': ['value1', 'value2', ...]}.
+
+    Returns:
+        List[str]: The generated SQL query fragments.
+    """
+    if not lookup_dict:
+        return []  # Return an empty list if the dictionary is empty
+
+    query_parts = []
+    for column, values in lookup_dict.items():
+        # Construct the query part
+        values_list = ", ".join(f"'{value}'" for value in values)
+        query_part = f"{column} IN ({values_list})"
+        query_parts.append(query_part)
+
+    return query_parts
 
 
 def qualitative_search(collection: Collection, data: Dict[str, str], primary_key: str) -> List[int]:

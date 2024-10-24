@@ -43,11 +43,12 @@ from curses import meta
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Callable, List, Mapping, Optional, Tuple, TypedDict, Union, Dict
+from typing import Any, Callable, List, Mapping, Optional, Tuple, TypedDict, Union, Dict
 
 import chromadb
 from chromadb.api import ClientAPI
 from chromadb.config import Settings
+from click import Option
 from pandas import DataFrame
 from tqdm import tqdm
 import ast
@@ -73,6 +74,14 @@ class ColumnType(Enum):
             raise ValueError(f"Invalid column type: {s}. Must be one of {[e.value for e in ColumnType]}")
 
 
+class ColumnDescriptions(TypedDict):
+    column_descriptions: Dict[str, str]
+    numerical_columns: List[str]
+    categorical_columns: List[str]
+    descriptive_columns: List[str]
+    identifier_columns: List[str]
+
+
 class DataCollectionMetadata(TypedDict):
     db_name: str
     table_name: str
@@ -96,13 +105,6 @@ class ClosestDataResult(TypedDict):
     lookup_key: str
     column_value: Union[str, int]
     data: str
-
-
-class ColumnDescriptions(TypedDict):
-    column_descriptions: Dict[str, str]
-    numerical_columns: List[str]
-    categorical_columns: List[str]
-    descriptive_columns: List[str]
 
 
 @dataclass
@@ -141,6 +143,26 @@ def create_chroma_client(chroma_config: ChromaDBConfig) -> ClientAPI:
         )
 
     return chroma_client
+
+
+def build_and_conditions(db_name_filter: Optional[str], table_name_filter: Optional[str]) -> List[Dict[str, Any]]:
+    """Build the and conditions for the ChromaDB query
+
+    Args:
+        db_name_filter (Optional[str]): Database name filter
+        table_name_filter (Optional[str]): table name filter
+
+    Returns:
+        List[Mapping[str, Mapping[str, str]]]: List of and conditions
+    """
+    and_conditions = []
+
+    if db_name_filter:
+        and_conditions.append({"db_name": {"$eq": db_name_filter}})
+    if table_name_filter:
+        and_conditions.append({"table_name": {"$eq": table_name_filter}})
+
+    return and_conditions
 
 
 class VectorDBDriver:
@@ -274,12 +296,7 @@ class VectorDBDriver:
         # Get the column info collection
         collection = self.column_info_collection
 
-        and_conditions = []
-
-        if db_name_filter:
-            and_conditions.append({"db_name": {"$eq": db_name_filter}})
-        if table_name_filter:
-            and_conditions.append({"table_name": {"$eq": table_name_filter}})
+        and_conditions = build_and_conditions(db_name_filter, table_name_filter)
 
         if len(and_conditions) > 0:
             results = collection.get(where={"$and": and_conditions})
@@ -294,6 +311,7 @@ class VectorDBDriver:
             numerical_columns=[],
             categorical_columns=[],
             descriptive_columns=[],
+            identifier_columns=[],
         )
 
         # Go throught the results and populate the dictionaries based on the column type
@@ -313,6 +331,8 @@ class VectorDBDriver:
                 ret["categorical_columns"].append(column_name)
             elif column_type == ColumnType.DESCRIPTIVE:
                 ret["descriptive_columns"].append(column_name)
+            elif column_type == ColumnType.IDENTIFIER:
+                ret["identifier_columns"].append(column_name)
 
         return ret
 
@@ -499,6 +519,34 @@ class VectorDBDriver:
             description (str): Column description
             column_type (ColumnType): Column type
         """
+
+        raise NotImplementedError("This method is not implemented yet.")
+
+    def get_id_list_from_descriptions(self, descriptions: Dict[str, str], table_name: str, db_name: str) -> Dict[str, Any]:
+        """Get the list of IDs from the descriptions.
+
+        Args:
+            descriptions (Dict[str, str]): Descriptions
+
+        Returns:
+            List[int]: List of IDs
+        """
+
+        # Create a dictionary with all corresponding embeddings
+        embeddings = {key: self.embedding_function(value) for key, value in descriptions.items()}
+
+        and_conditions = build_and_conditions(db_name, table_name)
+
+        if len(and_conditions) > 0:
+            results = self.dataset_collection.query(
+                query_embeddings=list(embeddings.values()),
+                where={"$and": and_conditions},
+            )
+        else:
+            # For each of the descriptions, get the closest data from the dataset collection
+            results = self.dataset_collection.query(
+                query_embeddings=list(embeddings.values()),
+            )
 
         raise NotImplementedError("This method is not implemented yet.")
 
