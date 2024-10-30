@@ -140,3 +140,17 @@ def test_check_if_column_name_exists(vectordb_driver: VectorDBDriver):
     )
 
     assert result is False
+
+
+def test_qualitative_search(vectordb_driver: VectorDBDriver):
+
+    # Test with a column that exists
+    result = vectordb_driver.qualitative_dataset_search(
+        data={"Description": "creamy"},
+        db_name=DEFAULT_DB_NAME,
+        table_name=DEFAULT_TABLE_NAME,
+    )
+
+    print(result)
+
+    assert len(result) > 0

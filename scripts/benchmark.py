@@ -9,12 +9,13 @@ from pathlib import Path
 
 import chromadb
 from langchain_openai import ChatOpenAI
-from pydantic.v1 import SecretStr
+from pydantic import SecretStr
 
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
 from nlqs.nlqs import ChromaDBConfig, NLQSResult
 from nlqs.parameters import OPENAI_API_KEY
-from nlqs.query_construction import generate_quantitaive_search_query, qualitative_search, summarize
+from nlqs.query_construction import construct_quantitaive_search_query_fragments, qualitative_search
+from nlqs.summarization import summarize
 
 # ChromaDB configuration
 chroma_config = ChromaDBConfig()
@@ -97,7 +98,7 @@ def chat_benchmark(user_input, chat_history):
         quantitaive_data = summarized_input.quantitative_data
         qualitative_data = summarized_input.qualitative_data
 
-        quantitaive_query = generate_quantitaive_search_query(
+        quantitaive_query = construct_quantitaive_search_query_fragments(
             quantitaive_data, driver.db_config.dataset_table_name, primary_key
         )
         quantitative_ids_uncleaned = driver.execute_query(quantitaive_query)

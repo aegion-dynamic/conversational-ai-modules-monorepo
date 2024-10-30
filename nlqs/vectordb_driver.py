@@ -53,6 +53,8 @@ from click import Option
 from pandas import DataFrame
 from tqdm import tqdm
 import ast
+from chromadb import QueryResult
+
 
 DEFAULT_COLUMN_INFO_COLLECTION_NAME = "nlqs_column_info"
 DEFAULT_DATASET_COLLECTION_NAME = "nlqs_descriptive_data"
@@ -109,6 +111,21 @@ class ClosestDataResult(TypedDict):
     data: str
 
 
+"""
+This is a dictionary where the key is the column name and the value is a 
+list of tuples where the first element is the lookup key and the second 
+element is the column value.
+"""
+QualitativeSearchResult = Dict[str, List[Tuple[str, str]]]
+
+
+"""
+This is a tuple where the first element is the column name and the second
+element is the column value.
+"""
+EqualsCondition = Tuple[str, str]
+
+
 @dataclass
 class ChromaDBConfig:
     table_description_collection_name: str = DEFAULT_TABLE_DESCRIPTION_COLLECTION_NAME
@@ -147,12 +164,17 @@ def create_chroma_client(chroma_config: ChromaDBConfig) -> ClientAPI:
     return chroma_client
 
 
-def build_and_conditions(db_name_filter: Optional[str], table_name_filter: Optional[str]) -> List[Dict[str, Any]]:
+def build_and_conditions(
+    db_name_filter: Optional[str] = None,
+    table_name_filter: Optional[str] = None,
+    equal_conditions: Optional[List[EqualsCondition]] = None,
+) -> List[Dict[str, Any]]:
     """Build the and conditions for the ChromaDB query
 
     Args:
         db_name_filter (Optional[str]): Database name filter
         table_name_filter (Optional[str]): table name filter
+        equal_conditions (Optional[List[Mapping[str, str]]]): Equal conditions
 
     Returns:
         List[Mapping[str, Mapping[str, str]]]: List of and conditions
@@ -163,6 +185,12 @@ def build_and_conditions(db_name_filter: Optional[str], table_name_filter: Optio
         and_conditions.append({"db_name": {"$eq": db_name_filter}})
     if table_name_filter:
         and_conditions.append({"table_name": {"$eq": table_name_filter}})
+
+    if equal_conditions:
+        for equal_condition in equal_conditions:
+            column_name = equal_condition[0]
+            column_value = equal_condition[1]
+            and_conditions.append({column_name: {"$eq": column_value}})
 
     return and_conditions
 
@@ -524,35 +552,72 @@ class VectorDBDriver:
 
         raise NotImplementedError("This method is not implemented yet.")
 
-    def get_id_list_from_descriptions(
-        self, descriptions: Dict[str, str], table_name: str, db_name: str
-    ) -> Dict[str, Any]:
-        """Get the list of IDs from the descriptions.
+    def qualitative_table_name_search(self, data: Dict[str, str]) -> List[str]:
+        """Performs a similarity search on the database and returns up to 5 similar results.
 
         Args:
-            descriptions (Dict[str, str]): Descriptions
+            data (Dict[str, str]): A dictionary of qualitative data to search for.
 
         Returns:
-            List[int]: List of IDs
+            List[str]: List of table names
+        """
+        raise NotImplementedError("This method is not implemented yet.")
+
+    def qualitative_db_name_search(self, data: Dict[str, str]) -> List[str]:
+        """Performs a similarity search on the database and returns up to 5 similar results.
+
+        Args:
+            data (Dict[str, str]): A dictionary of qualitative data to search for.
+
+        Returns:
+            List[str]: List of database names
+        """
+        raise NotImplementedError("This method is not implemented yet.")
+
+    def qualitative_dataset_search(
+        self, data: Dict[str, str], table_name: str, db_name: str
+    ) -> QualitativeSearchResult:
+        """Performs a similarity search on the database and returns up to 5 similar results per column.
+
+        Args:
+            data (Dict[str, str]):  A dictionary of qualitative data to search for.
+            table_name (str): Table name
+            db_name (str): Database name
+
+        Returns:
+            QualitativeSearchResult: Column wise search results which returns the primary key names and values to search for.
         """
 
-        # Create a dictionary with all corresponding embeddings
-        embeddings = {key: self.embedding_function(value) for key, value in descriptions.items()}
+        ids_per_column: QualitativeSearchResult = {}
 
-        and_conditions = build_and_conditions(db_name, table_name)
+        collection = self.dataset_collection
 
-        if len(and_conditions) > 0:
-            results = self.dataset_collection.query(
-                query_embeddings=list(embeddings.values()),
+        # TODO: Get the filter criteria for the table name and db name
+        for column_name, condition in data.items():
+            embedding = self.embedding_function(str(condition))
+            and_conditions = build_and_conditions(
+                db_name_filter=db_name,
+                table_name_filter=table_name,
+                equal_conditions=[("column_name", column_name)],
+            )
+            query_result: QueryResult = collection.query(
+                query_embeddings=[embedding],
+                n_results=5,
                 where={"$and": and_conditions},
-            )
-        else:
-            # For each of the descriptions, get the closest data from the dataset collection
-            results = self.dataset_collection.query(
-                query_embeddings=list(embeddings.values()),
+                # where={"column_name": {"$eq": column_name}},
             )
 
-        raise NotImplementedError("This method is not implemented yet.")
+            if query_result["metadatas"]:
+                ids_for_column = set()
+                for metadata_objects in query_result["metadatas"]:
+                    for item in metadata_objects:
+                        id_column_value = str(item.get("lookup_key_column_value"))
+                        id_column_name = str(item.get("lookup_key_column_name"))
+                        if id_column_value is not None:
+                            ids_for_column.add((id_column_name, id_column_value))
+                ids_per_column[column_name] = list(ids_for_column)
+
+        return ids_per_column
 
     @staticmethod
     def initialize_nlqs_vectordb(

@@ -1,5 +1,8 @@
 from typing import Dict, List
-from chromadb import Collection, QueryResult
+from unittest.mock import DEFAULT
+
+from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME
+from nlqs.vectordb_driver import VectorDBDriver
 
 
 def join_fragments(fragments: List[str], joiner: str = "AND") -> str:
@@ -102,55 +105,44 @@ def construct_identifier_search_query_fragments(identifier_data: Dict[str, str])
     return query_parts
 
 
-def construct_descriptive_search_query_fragments(lookup_dict: Dict[str, List[str]]) -> List[str]:
+def construct_descriptive_search_query_fragments(
+    descriptive_data: Dict[str, str], vectordb_driver: VectorDBDriver
+) -> Dict[str, List[str]]:
     """Creates an SQL query from a dictionary of descriptive data.
 
     Args:
-        lookup_dict (Dict[str, List[str]]): A dictionary of descriptive data in the form {'column_name': ['value1', 'value2', ...]}.
+        descriptive_data (Dict[str, str]):  A dictionary of descriptive data in the form {'column_name': 'condition'}.
 
     Returns:
         List[str]: The generated SQL query fragments.
     """
-    if not lookup_dict:
-        return []  # Return an empty list if the dictionary is empty
 
-    query_parts = []
-    for column, values in lookup_dict.items():
-        # Construct the query part
-        values_list = ", ".join(f"'{value}'" for value in values)
-        query_part = f"{column} IN ({values_list})"
-        query_parts.append(query_part)
+    resutls = vectordb_driver.qualitative_dataset_search(
+        data=descriptive_data, db_name=DEFAULT_DB_NAME, table_name=DEFAULT_TABLE_NAME
+    )
 
-    return query_parts
+    if not resutls:
+        return {}  # Return an empty string if the dictionary is empty
 
+    ret = {}
 
-def qualitative_search(collection: Collection, data: Dict[str, str], primary_key: str) -> List[int]:
-    """Performs a similarity search on the database and returns up to 5 similar results per column.
+    for column, pk_column_name_value_pairs in resutls.items():
+        query_parts = []
+        # Construct a dictionary of primary key column names and values
+        temp_storage: Dict[str, List[str]] = {}
 
-    Args:
-        collection (chromadb.Collection): The ChromaDB collection to search.
-        data (Dict[str, str]): A dictionary of qualitative data to search for.
-        primary_key (str): The primary key column name in the database.
+        # Store the value_pairs in the temp_storage
+        for pk_column_name, value in pk_column_name_value_pairs:
+            if pk_column_name not in temp_storage:
+                temp_storage[pk_column_name] = []
+            temp_storage[pk_column_name].append(value)
 
-    Returns:
-        List[int]: A list of unique IDs from the search results.
-    """
-    ids_per_column = {}
+        # Construct the query part for each primary key column
+        for pk_column_name, values in temp_storage.items():
+            values_list = ", ".join(f"{value}" for value in values)
+            query_part = f"{pk_column_name} IN ({values_list})"
+            query_parts.append(query_part)
 
-    for column, condition in data.items():
-        query_result: QueryResult = collection.query(query_texts=condition, n_results=5, where={"column_name": column})
+        ret[column] = query_parts
 
-        if query_result["metadatas"]:
-            ids_for_column = set()
-            for result in query_result["metadatas"]:
-                for item in result:
-                    id_value = item.get(primary_key)
-                    if id_value is not None:
-                        ids_for_column.add(int(id_value))
-            ids_per_column[column] = list(ids_for_column)
-
-    print(f"ids_per_column: {ids_per_column}")
-
-    # Flatten the list of lists into a single list of unique IDs
-    all_ids = list(set([id_val for sublist in ids_per_column.values() for id_val in sublist]))
-    return all_ids
+    return ret
