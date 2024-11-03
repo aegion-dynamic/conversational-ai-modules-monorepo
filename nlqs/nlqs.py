@@ -3,8 +3,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple, Union
 
-from langchain_openai import ChatOpenAI
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from pydantic import SecretStr
 
 from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
@@ -210,6 +209,12 @@ class NLQS:
             descriptive_query_fragments = construct_descriptive_search_query_fragments(
                 descriptive_data, self.vectordb_driver
             )
+
+            # Construct the final query
+            # For now just pass the descriptive query fragments so that we don't have to worry about the other queries and the intersections
+            # TODO: Figure out how to construct a single query that combines all the fragments and also combinations of the fragments (aka, intersections)
+
+            final_query = construct_search_field(
 
             # self.vectordb_driver.get_id_list_from_descriptions(
             #     descriptions=descriptive_data, table_name=DEFAULT_TABLE_NAME, db_name=DEFAULT_DB_NAME

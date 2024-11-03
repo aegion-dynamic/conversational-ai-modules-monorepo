@@ -1,4 +1,5 @@
 import pandas as pd
+
 from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME
 from nlqs.vectordb_driver import ChromaDBConfig, ColumnType, VectorDBDriver
 

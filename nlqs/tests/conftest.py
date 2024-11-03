@@ -3,11 +3,11 @@ from pathlib import Path
 from typing import Callable, List
 from unittest.mock import Mock, patch
 
-from langchain_openai import OpenAIEmbeddings
 import pandas as pd
 import psycopg2
-from pydantic import SecretStr
 import pytest
+from langchain_openai import OpenAIEmbeddings
+from pydantic import SecretStr
 
 from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver

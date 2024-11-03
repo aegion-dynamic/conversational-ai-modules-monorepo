@@ -1,6 +1,10 @@
 import pytest
-from nlqs.query_construction import construct_descriptive_search_query_fragments, join_fragments
-from nlqs.query_construction import join_fragments, construct_quantitaive_search_query_fragments
+
+from nlqs.query_construction import (
+    construct_descriptive_search_query_fragments,
+    construct_quantitaive_search_query_fragments,
+    join_fragments,
+)
 from nlqs.vectordb_driver import VectorDBDriver
 
 

@@ -39,22 +39,21 @@ Table Descriptions Collection (name: nlqs_table_descriptions)
 
 from __future__ import annotations
 
+import ast
 import collections
 from curses import meta
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, List, Mapping, Optional, Tuple, TypedDict, Union, Dict
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, TypedDict, Union
 
 import chromadb
+from chromadb import QueryResult
 from chromadb.api import ClientAPI
 from chromadb.config import Settings
 from click import Option
 from pandas import DataFrame
 from tqdm import tqdm
-import ast
-from chromadb import QueryResult
-
 
 DEFAULT_COLUMN_INFO_COLLECTION_NAME = "nlqs_column_info"
 DEFAULT_DATASET_COLLECTION_NAME = "nlqs_descriptive_data"

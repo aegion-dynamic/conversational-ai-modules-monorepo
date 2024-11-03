@@ -146,3 +146,23 @@ def construct_descriptive_search_query_fragments(
         ret[column] = query_parts
 
     return ret
+
+
+def construct_final_search_query(where_query_fragments: List[str], database_name: str, table_name: str) -> List[str]:
+    """Construct the search query using the fragments (database and table names)
+
+    Args:
+        where_query_fragments (List[str]): The where conditions that need to be appended
+        database_name (str): The name of the database
+        table_name (str): The name fo the table
+
+    Returns:
+        List[str]: The list of queries
+    """
+
+    # Construct the final query
+    if not where_query_fragments:
+        return []
+
+    queries = [f"SELECT * FROM {database_name}.{table_name} WHERE {fragment};" for fragment in where_query_fragments]
+    return queries

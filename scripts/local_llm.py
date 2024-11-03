@@ -1,7 +1,6 @@
+from langchain_core.prompts import PromptTemplate
 from langchain_huggingface.llms import HuggingFacePipeline
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-from langchain_core.prompts import PromptTemplate
-
 
 local_model_dir = "./.model_cache/gpt2"
 
