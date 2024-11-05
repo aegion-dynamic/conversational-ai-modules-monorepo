@@ -16,7 +16,7 @@ def test_nlsq_api(chroma_config):
         chroma_config=chroma_config,
     )
 
-    user_input = "suggest me a product for a headache"
+    user_input = "suggest me a product that tastes like smores"
 
     response = nlsq.execute_nlqs_query_workflow(user_input, [])
 

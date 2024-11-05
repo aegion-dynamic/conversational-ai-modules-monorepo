@@ -12,10 +12,12 @@ from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME, OPENAI_API_KEY
 from nlqs.query_construction import (
     construct_categorical_search_query_fragments,
     construct_descriptive_search_query_fragments,
+    construct_final_search_query,
     construct_quantitaive_search_query_fragments,
 )
 from nlqs.summarization import summarize
 from nlqs.vectordb_driver import ChromaDBConfig, VectorDBDriver
+from nlqs.search_field import SearchField
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -198,23 +200,44 @@ class NLQS:
 
         print("checking for user requested columns...")
         if len(summarized_input.user_requested_columns) > 0:
-
             numerical_data = summarized_input.numerical_data
             categorical_data = summarized_input.categorical_data
             descriptive_data = summarized_input.descriptive_data
             identifier_data = summarized_input.identifier_data
 
+            identifier_query_fragments = construct_quantitaive_search_query_fragments(identifier_data)
             quantitaive_query_fragments = construct_quantitaive_search_query_fragments(numerical_data)
             categorical_query_fragments = construct_categorical_search_query_fragments(categorical_data)
             descriptive_query_fragments = construct_descriptive_search_query_fragments(
                 descriptive_data, self.vectordb_driver
             )
 
-            # Construct the final query
-            # For now just pass the descriptive query fragments so that we don't have to worry about the other queries and the intersections
-            # TODO: Figure out how to construct a single query that combines all the fragments and also combinations of the fragments (aka, intersections)
+            # Construct a search field that will capture all the data from the user input
 
-            final_query = construct_search_field(
+            search_field_object = SearchField.construct_search_field(
+                descriptive_query_fragments=[
+                    fragment for fragments in descriptive_query_fragments.values() for fragment in fragments
+                ],
+                categorical_query_fragments=categorical_query_fragments,
+                identifier_query_fragments=identifier_query_fragments,
+                quantitative_query_fragments=quantitaive_query_fragments,
+                database_driver=self.connection_driver,
+                database_name=DEFAULT_DB_NAME,
+                table_name=DEFAULT_TABLE_NAME,
+            )
+
+            print(search_field_object.get_results())
+
+            # # Construct the final query
+            # # For now just pass the descriptive query fragments so that we don't have to worry about the other queries and the intersections
+            # # TODO: Figure out how to construct a single query that combines all the fragments and also combinations of the fragments (aka, intersections)
+            # for column, query_fragments in descriptive_query_fragments.items():
+
+            #     final_queries = construct_final_search_query(query_fragments, DEFAULT_DB_NAME, DEFAULT_TABLE_NAME)
+            #     print(final_queries)
+            #     # self.vectordb_driver.get_id_list_from_descriptions(
+            #     #     descriptions=descriptive_data, table_name=DEFAULT_TABLE_NAME, db_name=DEFAULT_DB_NAME
+            #     # )
 
             # self.vectordb_driver.get_id_list_from_descriptions(
             #     descriptions=descriptive_data, table_name=DEFAULT_TABLE_NAME, db_name=DEFAULT_DB_NAME

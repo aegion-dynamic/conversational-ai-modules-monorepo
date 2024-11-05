@@ -342,7 +342,7 @@ def summarize(
             numerical_data[column_name] = description
 
     for column_name, description in summarized_input_dict.get("qualitative_data", {}).items():
-        if column_name not in column_descriptions_dictionary:
+        if column_name not in column_descriptions_dictionary.keys():
             closest_column_name, column_type = vectordb.get_closest_column_from_description(
                 approximate_column_name=column_name,
                 users_description=description,
@@ -366,8 +366,68 @@ def summarize(
                 raise ValueError(f"Invalid column type '{column_type}' for column '{closest_column_name}'")
 
         else:
+            # Add the column to the corresponding dictionary after checking the column type
+            column_type = vectordb.get_column_type(column_name, DEFAULT_TABLE_NAME, DEFAULT_DB_NAME)
+            if column_type == ColumnType.NUMERICAL:
+                numerical_data[column_name] = description
+            elif column_type == ColumnType.CATEGORICAL:
+                categorical_data[column_name] = description
+            elif column_type == ColumnType.DESCRIPTIVE:
+                descriptive_data[column_name] = description
+            elif column_type == ColumnType.IDENTIFIER:
+                identifier_data[column_name] = description
+            else:
+                raise ValueError(f"Invalid column type '{column_type}' for column '{column_name}'")
+
+    for column_name, description in summarized_input_dict.get("quantitative_data", {}).items():
+        if column_name not in column_descriptions_dictionary.keys():
+            closest_column_name, column_type = vectordb.get_closest_column_from_description(
+                approximate_column_name=column_name,
+                users_description=description,
+                sample_data_strings=[],
+                database_name=DEFAULT_DB_NAME,
+                table_name=DEFAULT_TABLE_NAME,
+            )
+
+            if closest_column_name not in column_descriptions_dictionary:
+                raise ValueError(f"Closest column name '{closest_column_name}' not found in chroma columns collection.")
+
+            if column_type == ColumnType.NUMERICAL:
+                numerical_data[closest_column_name] = description
+
+            else:
+                logger.warning(
+                    f"Warning ! column type '{column_type}' for column '{closest_column_name}' is not numerical as expected."
+                )
+
+                if column_type == ColumnType.CATEGORICAL:
+                    categorical_data[closest_column_name] = description
+                elif column_type == ColumnType.DESCRIPTIVE:
+                    descriptive_data[closest_column_name] = description
+                elif column_type == ColumnType.IDENTIFIER:
+                    identifier_data[closest_column_name] = description
+                else:
+                    raise ValueError(f"Invalid column type '{column_type}' for column '{closest_column_name}'")
+
+        else:
             # Add the column to the corresponding dictionary
-            categorical_data[column_name] = description
+            column_type = vectordb.get_column_type(column_name, DEFAULT_TABLE_NAME, DEFAULT_DB_NAME)
+            if column_type == ColumnType.NUMERICAL:
+                numerical_data[column_name] = description
+
+            else:
+                logger.warning(
+                    f"Warning ! column type '{column_type}' for column '{column_name}' is not numerical as expected."
+                )
+
+                if column_type == ColumnType.CATEGORICAL:
+                    categorical_data[column_name] = description
+                elif column_type == ColumnType.DESCRIPTIVE:
+                    descriptive_data[column_name] = description
+                elif column_type == ColumnType.IDENTIFIER:
+                    identifier_data[column_name] = description
+                else:
+                    raise ValueError(f"Invalid column type '{column_type}' for column '{column_name}'")
 
     summazied_user_requested_columns: List[str] = summarized_input_dict.get("user_requested_columns", [])
     get_validated_user_requested_columns(vectordb, summazied_user_requested_columns, "default_table", "default_db")

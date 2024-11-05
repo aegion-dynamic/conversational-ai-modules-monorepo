@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME
 from nlqs.vectordb_driver import ChromaDBConfig, ColumnType, VectorDBDriver
@@ -94,6 +95,44 @@ def test_get_closest_column_from_description(vectordb_driver: VectorDBDriver):
 
     assert column_name == "Description"
     assert column_type == ColumnType.DESCRIPTIVE
+
+
+def test_get_column_type(vectordb_driver: VectorDBDriver):
+
+    # Test with a descriptive column
+    column_type = vectordb_driver.get_column_type(
+        column_name="Description",
+        db_name=DEFAULT_DB_NAME,
+        table_name=DEFAULT_TABLE_NAME,
+    )
+
+    assert column_type == ColumnType.DESCRIPTIVE
+
+    # Test with a categorical column
+    column_type = vectordb_driver.get_column_type(
+        column_name="Category",
+        db_name=DEFAULT_DB_NAME,
+        table_name=DEFAULT_TABLE_NAME,
+    )
+
+    assert column_type == ColumnType.CATEGORICAL
+
+    # Test with an identifier column
+    # column_type = vectordb_driver.get_column_type(
+    #     column_name="Product ID",
+    #     db_name=DEFAULT_DB_NAME,
+    #     table_name=DEFAULT_TABLE_NAME,
+    # )
+
+    # assert column_type == ColumnType.IDENTIFIER
+
+    # Test with a column that does not exist
+    with pytest.raises(ValueError):
+        column_type = vectordb_driver.get_column_type(
+            column_name="random_column",
+            db_name=DEFAULT_DB_NAME,
+            table_name=DEFAULT_TABLE_NAME,
+        )
 
 
 def test_retrieve_descriptions_and_types_from_db(vectordb_driver: VectorDBDriver):

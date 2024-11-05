@@ -31,17 +31,29 @@ class SearchField:
         # Datastore for the return type of the search
         self.search_results: Dict[str, List[Any]] = {}
 
-    def run_queries(self, database_name: str, table_name: str) -> None:
-        """Runs the queries on the database and stores the results in the search_results attribute."""
+    def run_queries(self, database_name: str, table_name: str):
+        """Runs the queries on the database and stores the results in the search_results attribute.
+
+        Args:
+            database_name (str): The name of the database
+            table_name (str): the name of the table
+
+        Returns:
+            _type_: Full rows of data from the database
+        """
+
         # Run the queries
         descriptive_queries = construct_final_search_query(self.descriptive_query_fragments, database_name, table_name)
 
         results = []
         for query in descriptive_queries:
             result = self.database_driver.execute_query(query)
-            results.append(result)
 
-        # TODO: Update to include searches for the rest of the fields
+            if result is not None:
+                results.extend(result)
+
+        # TODO: Update to include searches for the rest of the fields this is should also create a more elaborate tree
+        # structure that has all the intersections of the results, etc.
 
         # self.search_results["categorical"] = self.database_driver.run_search_query(
         #     database_name, table_name, self.categorical_query_fragments
@@ -52,6 +64,12 @@ class SearchField:
         # self.search_results["quantitative"] = self.database_driver.run_search_query(
         #     database_name, table_name, self.quantitative_query_fragments
         # )
+
+        return results
+
+    def get_results(self):
+
+        return self.search_results
 
     @staticmethod
     def construct_search_field(
@@ -72,6 +90,8 @@ class SearchField:
             database_driver=database_driver,
         )
 
-        ret.run_queries(database_name, table_name)
+        results = ret.run_queries(database_name, table_name)
+
+        ret.search_results["default"] = results
 
         return ret

@@ -114,7 +114,7 @@ def construct_descriptive_search_query_fragments(
         descriptive_data (Dict[str, str]):  A dictionary of descriptive data in the form {'column_name': 'condition'}.
 
     Returns:
-        List[str]: The generated SQL query fragments.
+        Dict[str, List[str]]: A dictionary of the generated SQL query fragments where the key is the column name.
     """
 
     resutls = vectordb_driver.qualitative_dataset_search(

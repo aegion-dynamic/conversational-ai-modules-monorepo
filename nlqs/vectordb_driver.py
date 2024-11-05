@@ -447,7 +447,7 @@ class VectorDBDriver:
         if not results:
             raise ValueError(f"No matching column found for {approximate_column_name}.")
 
-        metadatas: List[List[Mapping[str, str | int | float | bool]]] | None = results["metadatas"]
+        metadatas = results["metadatas"]
         if not metadatas:
             raise ValueError(f"No metadata found in chromadb query result for {approximate_column_name}.")
 
@@ -512,9 +512,13 @@ class VectorDBDriver:
 
         Returns:
             ColumnType: Column type
+
+        Raises:
+            ValueError: If the column is not found in the database
+            ValueError: If no metadata is found in the chromadb query result
         """
         # Query the column info collection to get the column type
-        results = self.column_info_collection.query(
+        results = self.column_info_collection.get(
             where={
                 "$and": [
                     {"column_name": {"$eq": column_name}},
@@ -524,14 +528,14 @@ class VectorDBDriver:
             }
         )
 
-        if not results["documents"]:
+        if not results["metadatas"]:
             raise ValueError(f"Column {column_name} not found in the database.")
 
-        metadatas: List[List[Mapping[str, str | int | float | bool]]] | None = results["metadatas"]
+        metadatas = results["metadatas"]
         if not metadatas:
             raise ValueError(f"No metadata found in chromadb query result for {column_name}.")
 
-        column_type = metadatas[0][0]["column_type"]
+        column_type = metadatas[0]["column_type"]
 
         return ColumnType(column_type)
 
