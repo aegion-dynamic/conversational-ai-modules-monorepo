@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Union
 
 import chromadb
 
-from discord_bot.parameters import (
+from scripts.parameters import (
     CHROMA_COLLECTION_NAME,
     OUTPUT_COLUMNS,
     SQL_TABLE_NAME,

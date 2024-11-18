@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple, Union
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from pydantic import SecretStr
+from pydantic.v1 import SecretStr
 
 from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
@@ -311,6 +311,6 @@ class NLQS:
         #     print(f"result: {result}")
         #     logger.info(f"result: {result}")
         # else:
-        #     result = NLQSResult(records=[], uris=[])
+        result = NLQSResult(records=[], uris=[])
 
-        # return result
+        return result

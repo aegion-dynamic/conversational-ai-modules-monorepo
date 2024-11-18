@@ -7,7 +7,7 @@ import pandas as pd
 import psycopg2
 import pytest
 from langchain_openai import OpenAIEmbeddings
-from pydantic import SecretStr
+from pydantic.v1 import SecretStr
 
 from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver

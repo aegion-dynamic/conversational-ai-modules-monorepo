@@ -7,9 +7,9 @@ from langchain.chains import LLMChain
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
+from pydantic.v1 import SecretStr
 
-from discord_bot.parameters import (
+from scripts.parameters import (
     CHROMA_COLLECTION_NAME,
     OUTPUT_COLUMNS,
     SQL_TABLE_NAME,
