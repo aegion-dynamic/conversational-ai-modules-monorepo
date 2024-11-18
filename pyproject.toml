@@ -8,7 +8,6 @@ readme = "README.md"
 packages = [
     { include = "nlqs" },
     { include = "expert_system" },
-    { include = "discord_bot" },
     { include = "tot" },
 ]
 
