@@ -1,4 +1,4 @@
-from typing import List, Literal, LiteralString, Optional
+from typing import List, Literal, Optional
 
 import openai
 from openai.types.chat.chat_completion import ChatCompletion
@@ -22,7 +22,7 @@ class StateEvaluator:
         self.evaluation_prompt = evaluation_prompt or self.default_evaluation_prompt()
 
     @staticmethod
-    def default_evaluation_prompt() -> LiteralString:
+    def default_evaluation_prompt() -> str:
         """Return the default evaluation prompt for the state evaluator."""
 
         return """

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple, Union
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from pydantic.v1 import SecretStr
+from pydantic import SecretStr
 
 from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver

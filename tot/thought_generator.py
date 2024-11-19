@@ -1,4 +1,4 @@
-from typing import List, Literal, LiteralString, Optional
+from typing import List, Literal, Optional
 
 import openai
 from openai.types.chat.chat_completion_system_message_param import (
@@ -22,7 +22,7 @@ class ThoughtGenerator:
         self.thought_generation_prompt = thought_generation_prompt or self.default_thought_generation_prompt()
 
     @staticmethod
-    def default_thought_generation_prompt() -> LiteralString:
+    def default_thought_generation_prompt() -> str:
         """Return the default thought generation prompt for the thought generator."""
 
         return """
