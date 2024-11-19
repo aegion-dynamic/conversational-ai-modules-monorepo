@@ -124,46 +124,29 @@ def pg_config():
 
 
 @pytest.fixture(scope="package")
-def setup_postgres_database(postgres_driver):
+def setup_postgres_database():
     """Setup method to create a test database and driver instance."""
-    # Create a test database and table
-    with psycopg2.connect(host="localhost", port=543) as conn:
+    with psycopg2.connect(host="localhost", port=5432, user="postgres", password="postgres", database="postgres") as conn:
         cursor = conn.cursor()
         cursor.execute(
-            f"""
-            CREATE TABLE {DEFAULT_TABLE_NAME} (
+            """
+            CREATE TABLE test_table (
                 id SERIAL PRIMARY KEY,
-                URL TEXT,
-                Description TEXT,
-                RandomText TEXT
-                RandomNumber REAL
-                RandomDate DATE
-                RandomLookup TEXT
+                name TEXT,
+                value REAL
             )
             """
         )
-        for i in range(1, 301):
-            cursor.execute(
-                f"INSERT INTO {DEFAULT_TABLE_NAME} (URL, Description, RandomText, RandomNumber, RandomDate, RandomLookup) VALUES (%s, %s, %s, %s, %s, %s)",
-                (
-                    f"http://example.com/{i}",
-                    f"Description {i}",
-                    f"Random text {i}",
-                    i * random.random(),
-                    "2023-01-01",
-                    f"{uuid.uuid4()}",
-                ),
-            )
+        cursor.execute("INSERT INTO test_table (name, value) VALUES ('John', 10.5)")
+        cursor.execute("INSERT INTO test_table (name, value) VALUES ('Jane', 20.0)")
 
         yield
 
-    with psycopg2.connect(host="localhost", port=543) as conn:
-        # Cleanup method to remove the test database file
-        cursor.execute(f"DROP TABLE {DEFAULT_TABLE_NAME}")
+        cursor.execute("DROP TABLE test_table")
 
 
 @pytest.fixture
-def postgres_driver(pg_config) -> PostgresDriver:
+def postgres_driver(pg_config, setup_postgres_database) -> PostgresDriver:
     return PostgresDriver(pg_config)
 
 
