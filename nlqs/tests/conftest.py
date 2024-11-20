@@ -17,7 +17,7 @@ from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME, OPENAI_API_KEY
 from nlqs.vectordb_driver import ChromaDBConfig, VectorDBDriver
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def sqlite_driver():
     sqlite_config = SQLiteConnectionConfig(db_file=Path("aegion.db"), dataset_table_name="new_dataset")
 
@@ -110,7 +110,7 @@ def setup_sqlite_database():
     test_db_file.unlink(missing_ok=True)
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def pg_config():
     return PostgresConnectionConfig(
         host="localhost",
@@ -123,39 +123,46 @@ def pg_config():
     )
 
 
-@pytest.fixture(scope="package")
+@pytest.fixture(scope="function")
 def setup_postgres_database():
     """Setup method to create a test database and driver instance."""
-    with psycopg2.connect(host="localhost", port=5432, user="postgres", password="postgres", database="postgres") as conn:
+    with psycopg2.connect(
+        host="localhost", port=5432, user="postgres", password="postgres", database="postgres"
+    ) as conn:
         cursor = conn.cursor()
         cursor.execute(
-            """
-            CREATE TABLE test_table (
+            f"""
+            CREATE TABLE {DEFAULT_TABLE_NAME} (
                 id SERIAL PRIMARY KEY,
                 name TEXT,
                 value REAL
             )
             """
         )
-        cursor.execute("INSERT INTO test_table (name, value) VALUES ('John', 10.5)")
-        cursor.execute("INSERT INTO test_table (name, value) VALUES ('Jane', 20.0)")
+        cursor.execute(f"INSERT INTO {DEFAULT_TABLE_NAME} (name, value) VALUES ('John', 10.5)")
+        cursor.execute(f"INSERT INTO {DEFAULT_TABLE_NAME} (name, value) VALUES ('Jane', 20.0)")
 
-        yield
+    yield
 
-        cursor.execute("DROP TABLE test_table")
+    with psycopg2.connect(
+        host="localhost", port=5432, user="postgres", password="postgres", database="postgres"
+    ) as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(f"DROP TABLE {DEFAULT_TABLE_NAME}")
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def postgres_driver(pg_config, setup_postgres_database) -> PostgresDriver:
     return PostgresDriver(pg_config)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def chroma_config():
     return ChromaDBConfig(persist_path=Path("./chroma"), is_local=True)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def vectordb_driver(chroma_config, embedding_function):
 
     VectorDBDriver.purge_nlqs_vectordb(chroma_config)
@@ -187,7 +194,7 @@ def vectordb_driver(chroma_config, embedding_function):
     return vectordb_driver
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def embedding_function() -> (
     Callable[[str], List[float]]
 ):  # -> Callable[..., List[float]]:# -> Callable[..., List[float]]:

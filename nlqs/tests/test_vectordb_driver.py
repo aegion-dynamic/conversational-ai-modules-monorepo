@@ -130,7 +130,7 @@ def test_get_column_type(vectordb_driver: VectorDBDriver):
     with pytest.raises(ValueError):
         column_type = vectordb_driver.get_column_type(
             column_name="random_column",
-            db_name=DEFAULT_DB_NAME,
+            db_name="postgres",
             table_name=DEFAULT_TABLE_NAME,
         )
 

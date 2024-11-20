@@ -36,33 +36,26 @@ def test_execute_query_successful(postgres_driver):
     assert result == [(1,)]
 
 
-def test_execute_query_with_error(postgres_driver):
+def test_execute_query_with_error(postgres_driver, setup_postgres_database):
     """Test handling of errors during query execution."""
     postgres_driver.connect()
     with pytest.raises(psycopg2.Error):
         postgres_driver.execute_query("SELECT * FROM nonexistent_table")
 
 
-def test_get_database_columns_successful(postgres_driver):
+def test_get_database_columns_successful(postgres_driver, setup_postgres_database):
     """Test retrieval of database columns in order."""
     postgres_driver.connect()
-    expected_columns = [("id",), ("name",), ("value",)]
+    expected_columns = ["id", "name", "value"]
     columns = postgres_driver.get_database_columns(DEFAULT_TABLE_NAME)
 
-
-def test_get_database_columns_with_error(postgres_driver):
-    """Test handling of errors during column retrieval."""
-    postgres_driver.connect()
-    mock_connection.cursor.return_value.fetchall.side_effect = Exception("Test error")
-    columns = postgres_driver.get_database_columns("test_table")
-    assert columns == []
+    assert frozenset(columns) == frozenset(expected_columns)
 
 
 def test_validate_query_valid_query(postgres_driver):
     """Test validation of a valid SQL query."""
     postgres_driver.connect()
-    mock_connection.cursor.return_value.fetchone.return_value = True
-    mock_connection.cursor.return_value.fetchall.return_value = [("id",), ("name",), ("value",)]
+    expected_return_value = [("id",), ("name",), ("value",)]
     is_valid = postgres_driver.validate_query("SELECT name, value FROM test_table WHERE id = 1")
     assert is_valid is True
 
@@ -70,10 +63,6 @@ def test_validate_query_valid_query(postgres_driver):
 def test_validate_query_invalid_query(postgres_driver):
     """Test validation of an invalid SQL query for a non-existent table."""
     postgres_driver.connect()
-
-    # Simulate no results for the table (table does not exist).
-    mock_connection.cursor.return_value.fetchone.return_value = None  # No table found
-    mock_connection.cursor.return_value.fetchall.return_value = []  # No columns found
 
     # Call the validate_query function with an invalid table
     is_valid = postgres_driver.validate_query("SELECT * FROM nonexistent_table")
@@ -101,19 +90,18 @@ def test_fetch_data_from_database_with_error(postgres_driver):
     assert df.empty
 
 
-def test_get_primary_key(postgres_driver):
+def test_get_primary_key(postgres_driver, setup_postgres_database):
     """Test getting the primary key of a table."""
     postgres_driver.connect()
-    expected_result = [("id",)]  # List of tuples
-    mock_connection.cursor.return_value.fetchall.return_value = expected_result
-    primary_key = postgres_driver.get_primary_key("test_table")
-    assert primary_key == expected_result[0][0]  # Assert on the column name
+    expected_result = "id"  # List of tuples
+    primary_key = postgres_driver.get_primary_key(DEFAULT_TABLE_NAME)
+    assert primary_key == expected_result  # Assert on the column name
 
 
 def test_get_primary_key_no_primary_key(postgres_driver):
     """Test getting the primary key when the table has no primary key."""
     postgres_driver.connect()
-    mock_connection.cursor.return_value.fetchall.return_value = []  # No primary key
+    # mock_connection.cursor.return_value.fetchall.return_value = []  # No primary key
     with pytest.raises(ValueError) as context:
         postgres_driver.get_primary_key("test_table")
     assert "No primary key found" in str(context.value)
@@ -122,10 +110,10 @@ def test_get_primary_key_no_primary_key(postgres_driver):
 def test_get_primary_key_multiple_primary_keys(postgres_driver):
     """Test getting the primary key when the table has multiple primary keys."""
     postgres_driver.connect()
-    mock_connection.cursor.return_value.fetchall.return_value = [
-        ("id1",),
-        ("id2",),
-    ]  # Mock multiple primary keys
+    # mock_connection.cursor.return_value.fetchall.return_value = [
+    #     ("id1",),
+    #     ("id2",),
+    # ]  # Mock multiple primary keys
     with pytest.raises(ValueError) as context:
         postgres_driver.get_primary_key("test_table_multiple_pk")
     assert "Multiple primary keys found" in str(context.value)
