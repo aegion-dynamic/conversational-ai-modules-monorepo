@@ -31,7 +31,7 @@ class SearchField:
         # Datastore for the return type of the search
         self.search_results: Dict[str, List[Any]] = {}
 
-    def run_queries(self, database_name: str, table_name: str):
+    def run_queries(self, table_name: str):
         """Runs the queries on the database and stores the results in the search_results attribute.
 
         Args:
@@ -42,8 +42,11 @@ class SearchField:
             _type_: Full rows of data from the database
         """
 
-        # Run the queries
-        descriptive_queries = construct_final_search_query(self.descriptive_query_fragments, database_name, table_name)
+        # Construct the different kinds of queries
+        descriptive_queries = construct_final_search_query(self.descriptive_query_fragments, table_name)
+        categorical_queries = construct_final_search_query(self.categorical_query_fragments, table_name)
+        identifier_queries = construct_final_search_query(self.identifier_query_fragments, table_name)
+        quantitative_queries = construct_final_search_query(self.quantitative_query_fragments, table_name)
 
         results = []
         for query in descriptive_queries:
@@ -52,19 +55,26 @@ class SearchField:
             if result is not None:
                 results.extend(result)
 
-        # TODO: Update to include searches for the rest of the fields this is should also create a more elaborate tree
-        # structure that has all the intersections of the results, etc.
+        for query in categorical_queries:
+            result = self.database_driver.execute_query(query)
 
-        # self.search_results["categorical"] = self.database_driver.run_search_query(
-        #     database_name, table_name, self.categorical_query_fragments
-        # )
-        # self.search_results["identifier"] = self.database_driver.run_search_query(
-        #     database_name, table_name, self.identifier_query_fragments
-        # )
-        # self.search_results["quantitative"] = self.database_driver.run_search_query(
-        #     database_name, table_name, self.quantitative_query_fragments
-        # )
+            if result is not None:
+                results.extend(result)
 
+        for query in identifier_queries:
+            result = self.database_driver.execute_query(query)
+
+            if result is not None:
+                results.extend(result)
+
+        for query in quantitative_queries:
+            result = self.database_driver.execute_query(query)
+
+            if result is not None:
+                results.extend(result)
+
+        # TODO: Contruct a field search tree to create a cascading search that allows us
+        # to ease the constraints on the search systematically
         return results
 
     def get_results(self):
@@ -90,7 +100,7 @@ class SearchField:
             database_driver=database_driver,
         )
 
-        results = ret.run_queries(database_name, table_name)
+        results = ret.run_queries(table_name)
 
         ret.search_results["default"] = results
 

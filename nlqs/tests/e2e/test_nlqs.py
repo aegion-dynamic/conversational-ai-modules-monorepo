@@ -2,7 +2,7 @@ from nlqs.database.postgres import PostgresConnectionConfig
 from nlqs.nlqs import NLQS, ChromaDBConfig
 
 
-def test_nlsq_api(chroma_config, pg_config):
+def test_nlsq_api(chroma_config, pg_config, setup_postgres_database):
     nlsq = NLQS(
         connection_config=pg_config,
         chroma_config=chroma_config,
