@@ -19,7 +19,7 @@ from nlqs.vectordb_driver import ChromaDBConfig, VectorDBDriver
 
 @pytest.fixture(scope="function")
 def sqlite_driver():
-    sqlite_config = SQLiteConnectionConfig(db_file=Path("aegion.db"), dataset_table_name="new_dataset")
+    sqlite_config = SQLiteConnectionConfig(db_file=Path("test_database.db"), dataset_table_name=DEFAULT_TABLE_NAME)
 
     db_driver = SQLiteDriver(sqlite_config=sqlite_config)
 
@@ -30,23 +30,21 @@ def sqlite_driver():
 def setup_sqlite_database():
     """Setup method to create a test database and driver instance."""
     test_db_file = Path("test_database.db")
-    sqlite_config = SQLiteConnectionConfig(db_file=test_db_file, dataset_table_name="test_table")
-    driver = SQLiteDriver(sqlite_config)
 
     # Create a test database and table
     with sqlite3.connect(test_db_file) as conn:
         cursor = conn.cursor()
         cursor.execute(
-            """
-            CREATE TABLE test_table (
+            f"""
+            CREATE TABLE {DEFAULT_TABLE_NAME} (
                 id INTEGER PRIMARY KEY,
                 name TEXT,
                 value REAL
             )
             """
         )
-        cursor.execute("INSERT INTO test_table (name, value) VALUES ('John', 10.5)")
-        cursor.execute("INSERT INTO test_table (name, value) VALUES ('Jane', 20.0)")
+        cursor.execute(f"INSERT INTO {DEFAULT_TABLE_NAME} (name, value) VALUES ('John', 10.5)")
+        cursor.execute(f"INSERT INTO {DEFAULT_TABLE_NAME} (name, value) VALUES ('Jane', 20.0)")
 
         # Create a table for column descriptions
         cursor.execute(
@@ -104,7 +102,7 @@ def setup_sqlite_database():
             """
         )
 
-    yield driver
+    yield
 
     # Cleanup method to remove the test database file
     test_db_file.unlink(missing_ok=True)
