@@ -19,6 +19,7 @@ from expert_system.parameters import (
     VECTORDB_USERNAME,
 )
 from expert_system.prompts import EXPERT_PROMPT_CONCISE, EXPERT_PROMPT_VERBOSE
+from utils.llm import get_default_llm
 
 
 def query_template(
@@ -91,13 +92,7 @@ class Chatbot:
     def initialize_qachain(self) -> None:
         """Initializes the QA Chain"""
 
-        self.llm = ChatOpenAI(
-            api_key=SecretStr(OPENAI_API_KEY),
-            temperature=0.1,
-            model="gpt-4",
-            verbose=True,
-            max_tokens=1500,
-        )
+        self.llm = get_default_llm()
 
     def converse(
         self,
