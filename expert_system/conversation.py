@@ -19,7 +19,7 @@ from expert_system.parameters import (
     VECTORDB_USERNAME,
 )
 from expert_system.prompts import EXPERT_PROMPT_CONCISE, EXPERT_PROMPT_VERBOSE
-from utils.llm import get_default_llm
+from utils.llm import get_default_embedding_function, get_default_llm
 
 
 def query_template(
@@ -79,7 +79,7 @@ class Chatbot:
                 chroma_client_auth_credentials=f"{VECTORDB_USERNAME}:{VECTORDB_PASSWORD}",
             ),
         )
-        openai_embedding_function = OpenAIEmbeddings(api_key=SecretStr(OPENAI_API_KEY))
+        openai_embedding_function = get_default_embedding_function()
         self.vectordb = Chroma(
             collection_name="ced-library",
             embedding_function=openai_embedding_function,

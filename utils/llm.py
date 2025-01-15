@@ -1,8 +1,8 @@
-from langchain_openai import ChatOpenAI
+from langchain_openai import AzureOpenAIEmbeddings, ChatOpenAI
 from pydantic.v1 import SecretStr
 from langchain_openai import AzureChatOpenAI
 
-from utils.parameters import OPENAI_API_KEY, AZURE_OPENAI_KEY, AZURE_OPENAI_ENDPOINT
+from utils.parameters import AZURE_OPENAI_EMBEDDING_ENDPOINT, OPENAI_API_KEY, AZURE_OPENAI_KEY, AZURE_OPENAI_ENDPOINT
 
 
 def get_default_llm():
@@ -20,6 +20,7 @@ def get_default_llm():
         azure_endpoint=AZURE_OPENAI_ENDPOINT,
         api_key=SecretStr(AZURE_OPENAI_KEY),
         api_version="2024-08-01-preview",
+        model="gpt-4o",
         temperature=0.3,
         max_tokens=None,
         timeout=None,
@@ -28,3 +29,14 @@ def get_default_llm():
     )
 
     return llm
+
+
+def get_default_embedding_function():
+    # Return the Azure embeddings
+
+    embedding_function = AzureOpenAIEmbeddings(
+        model="text-embedding-ada-002",  # Note, we are using this for the Cannabis Chatbot
+        api_key=SecretStr(AZURE_OPENAI_KEY),
+        azure_endpoint=AZURE_OPENAI_EMBEDDING_ENDPOINT,
+    )
+    return embedding_function
