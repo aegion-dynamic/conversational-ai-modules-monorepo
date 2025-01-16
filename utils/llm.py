@@ -1,8 +1,12 @@
-from langchain_openai import AzureOpenAIEmbeddings, ChatOpenAI
+from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings, ChatOpenAI
 from pydantic.v1 import SecretStr
-from langchain_openai import AzureChatOpenAI
 
-from utils.parameters import AZURE_OPENAI_EMBEDDING_ENDPOINT, OPENAI_API_KEY, AZURE_OPENAI_KEY, AZURE_OPENAI_ENDPOINT
+from utils.parameters import (
+    AZURE_OPENAI_EMBEDDING_ENDPOINT,
+    AZURE_OPENAI_ENDPOINT,
+    AZURE_OPENAI_KEY,
+    OPENAI_API_KEY,
+)
 
 
 def get_default_llm():

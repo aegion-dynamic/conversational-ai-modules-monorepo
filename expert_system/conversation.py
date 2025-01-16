@@ -5,10 +5,8 @@ from chromadb.config import Settings
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_chroma import Chroma
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from pydantic.v1 import SecretStr
 
 from expert_system.chat_reference import ChatReference
 from expert_system.parameters import (
@@ -87,7 +85,8 @@ class Chatbot:
         )
 
         # Test the connection
-        print(f"Testing connection to VectorDB (find a number > 0):{chroma_client.heartbeat()}")
+        print(
+            f"Testing connection to VectorDB (find a number > 0):{chroma_client.heartbeat()}")
 
     def initialize_qachain(self) -> None:
         """Initializes the QA Chain"""
