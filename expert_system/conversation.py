@@ -1,14 +1,15 @@
 from typing import List, Optional, Tuple, Union
+import json
 
+from langchain_core.output_parsers import PydanticOutputParser
 import chromadb
 from chromadb.config import Settings
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_chroma import Chroma
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from pydantic import SecretStr
+from pydantic import BaseModel, Field
 
 from expert_system.chat_reference import ChatReference
 from expert_system.parameters import (
@@ -19,6 +20,7 @@ from expert_system.parameters import (
     VECTORDB_USERNAME,
 )
 from expert_system.prompts import EXPERT_PROMPT_CONCISE, EXPERT_PROMPT_VERBOSE
+from utils.llm import get_default_embedding_function, get_default_llm
 
 
 def query_template(
@@ -78,7 +80,7 @@ class Chatbot:
                 chroma_client_auth_credentials=f"{VECTORDB_USERNAME}:{VECTORDB_PASSWORD}",
             ),
         )
-        openai_embedding_function = OpenAIEmbeddings(api_key=SecretStr(OPENAI_API_KEY))
+        openai_embedding_function = get_default_embedding_function()
         self.vectordb = Chroma(
             collection_name="ced-library",
             embedding_function=openai_embedding_function,
@@ -86,18 +88,48 @@ class Chatbot:
         )
 
         # Test the connection
-        print(f"Testing connection to VectorDB (find a number > 0):{chroma_client.heartbeat()}")
+        print(
+            f"Testing connection to VectorDB (find a number > 0):{chroma_client.heartbeat()}")
 
     def initialize_qachain(self) -> None:
         """Initializes the QA Chain"""
 
-        self.llm = ChatOpenAI(
-            api_key=SecretStr(OPENAI_API_KEY),
-            temperature=0.1,
-            model="gpt-4",
-            verbose=True,
-            max_tokens=1500,
+        self.llm = get_default_llm()
+
+    def is_conversational_query(self, user_input: str) -> Tuple[bool, str]:
+        """Check if the user input is a normal conversational query
+
+        Args:
+            user_input (str): The user input
+
+        Returns:
+            Tuple[bool, str]: (is_conversational, response_message)
+        """
+
+        class IsConversationalQuery(BaseModel):
+            is_conversational: bool = Field(...,
+                                            description="Is the input a conversational query")
+            response: str = Field(...,
+                                  description="Response to the query if it is conversational")
+
+        output_parser = PydanticOutputParser(
+            pydantic_object=IsConversationalQuery
         )
+
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """Analyze if the following input is a conversational query, not asking to answer a question that requires knowledges. Wrap the output in `json` tags\n{format_instructions}""",
+                ),
+                ("human", "{input}"),
+            ]
+        ).partial(format_instructions=output_parser.get_format_instructions())
+
+        chain = prompt | self.llm | output_parser
+        result = chain.invoke({"input": user_input})
+
+        return result.is_conversational, result.response
 
     def converse(
         self,
@@ -156,7 +188,7 @@ class Chatbot:
             previous_messages (list, optional): List of previous messages. Defaults to [].
 
         Returns:
-            Tuple[str, List[ChatReference]]: Response from the chatbot and the list of references
+            Tuple[str, List[ChatReference]: Response from the chatbot and the list of references
         """
         if previous_messages is None:
             previous_messages = []
