@@ -5,9 +5,7 @@
 This project implements a flexible, state-based conversation system that guides users through a structured dialogue to provide personalized recommendations. Built around the concept of a state machine, it systematically collects necessary information before making tailored suggestions.
 
 ## System Architecture
-
-![State Machine Recommendation System Architecture](path/to/your/architecture_diagram.png)
-
+![State Machine Recommendation System Architecture](path/to/your/state_transition_diagram.png)
 *The diagram above illustrates the core components and flow of the state machine recommendation system. It shows how user input flows through the state machine, how context is accumulated, and how recommendations are generated.*
 
 ## Core Concept: State-Driven Conversations
@@ -48,10 +46,6 @@ The system progresses through a series of states (e.g., "Initial Inquiry" → "A
 │   Inquiry   │─────▶│ Assessment  │─────▶│Recommendation│─────▶│& Next Steps │
 └─────────────┘      └─────────────┘      └─────────────┘      └─────────────┘
 ```
-
-## State Transition Visualization
-
-![State Transition Flow](path/to/your/state_transition_diagram.png)
 
 *This diagram shows how the system transitions between states based on information collection and user inputs. It illustrates the decision points that trigger state changes.*
 
