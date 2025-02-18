@@ -1,12 +1,12 @@
-### **State Machine Recommendation System**  
+# **State Machine of Thought**  
 
 ## **Simple Explanation**  
 
 ### **The State Machine Architecture:**  
-- Acts as a **map** guiding a conversation through different stages.  
-- Each stage (**state**) has **specific goals** and collects required information.  
+- Acts as a **state machine** guiding a conversation through different stages.  
+- Each **state** has **specific goals** and collects required information.  
 - Tracks what **information is gathered** and what’s still needed.  
-- Moves to the **next stage** based on collected data.  
+- Moves to the **next state** based on collected data.  
 
 ### **The Configuration Model:**  
 - Serves as a **blueprint** that defines how the system operates.  
@@ -17,9 +17,9 @@ A flexible recommendation system that guides users through a structured conversa
 
 ![State Machine Architecture](./Cannabis_workflow.png) 
 
-## **Creating Your Own Recommendation System**  
+## Creating Your Own Recommendation System
 
-### **Step 1: Define Your States**  
+### Step 1: Define Your States
 
 Each state represents a conversation phase with specific goals and required information. Here's how to create them:  
 
@@ -63,7 +63,7 @@ restaurant_config = SystemConfig(
 )
 ```
 
-### **Step 2: Understanding State Components**  
+### Step 2: Understanding State Components
 
 For each state, define:  
 
@@ -71,7 +71,7 @@ For each state, define:
 2. **goal**: The purpose of this conversation stage  
 3. **generate_queries**: Whether to generate search queries (typically for recommendation state)  
 
-### **Step 3: Build Your Knowledge Base**  
+### Step 3: Build Your Knowledge Base
 
 The knowledge base contains domain-specific information used for recommendations:  
 
@@ -82,7 +82,7 @@ knowledge_base={
 }
 ```
 
-### **Step 4: Initialize and Run Your System**  
+### Step 4: Initialize and Run Your System
 
 ```python
 # Initialize the system
@@ -101,7 +101,7 @@ while True:
         print(f"Follow-up: {response.follow_up_question}")
 ```
 
-## **Example Explained: Cannabis Recommendation System**  
+## Example Explained: Cannabis Recommendation System
 
 The cannabis example demonstrates a complete implementation:  
 
@@ -142,13 +142,12 @@ The cannabis example demonstrates a complete implementation:
 
 We're working on enhancing the system with:  
 
+- Auto tuning prompts and system to include rules that ensure boundary conditions are met more clearly preventing unnecessary state transitions.
+
 - **Tree of Thoughts**: For exploring multiple reasoning paths  
   ![Tree of Thoughts](./tree_of_thoughts.jpeg)
 
 - **Knowledge Graph Integration**: For better concept relationships  
   ![Knowledge Graph](./ToG.png)  
 
-## **License**  
-
-This project is licensed under the MIT License.
 
