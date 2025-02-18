@@ -1,32 +1,27 @@
-# State Machine Recommendation System
+### **State Machine Recommendation System**  
 
-## Simple Explanation
+## **Simple Explanation**  
 
-### The State Machine Architecture:
-* Think of it like a map guiding a conversation through different stages
-* Each stage (state) has specific goals and information it needs to collect
-* It keeps track of what information it has and what it still needs
-* It knows when to move to the next stage based on the information gathered
+### **The State Machine Architecture:**  
+- Acts as a **map** guiding a conversation through different stages.  
+- Each stage (**state**) has **specific goals** and collects required information.  
+- Tracks what **information is gathered** and what’s still needed.  
+- Moves to the **next stage** based on collected data.  
 
-### The Configuration Model:
-* This is like a blueprint that tells the system how to behave
-* You can define:
-   * What the system is called and what it does
-   * What stages (states) exist
-   * What information needs to be collected in each stage
-   * What knowledge the system has access to
+### **The Configuration Model:**  
+- Serves as a **blueprint** that defines how the system operates.  
 
-## Overview
+## **Overview**  
 
-A flexible recommendation system that guides users through a structured conversation using a state machine approach.
+A flexible recommendation system that guides users through a structured conversation using a state machine approach.  
 
-![State Machine Architecture](state_machine/state-machine-recommendation-system-readme.png)
+![State Machine Architecture](./Cannabis_workflow.png) 
 
-## Creating Your Own Recommendation System
+## **Creating Your Own Recommendation System**  
 
-### Step 1: Define Your States
+### **Step 1: Define Your States**  
 
-Each state represents a conversation phase with specific goals and required information. Here's how to create them:
+Each state represents a conversation phase with specific goals and required information. Here's how to create them:  
 
 ```python
 from state_machine.state_machine import SystemConfig, RecommendationSystem
@@ -68,17 +63,17 @@ restaurant_config = SystemConfig(
 )
 ```
 
-### Step 2: Understanding State Components
+### **Step 2: Understanding State Components**  
 
-For each state, define:
+For each state, define:  
 
-1. **required_info**: List of data points to collect in this state
-2. **goal**: The purpose of this conversation stage
-3. **generate_queries**: Whether to generate search queries (typically for recommendation state)
+1. **required_info**: List of data points to collect in this state  
+2. **goal**: The purpose of this conversation stage  
+3. **generate_queries**: Whether to generate search queries (typically for recommendation state)  
 
-### Step 3: Build Your Knowledge Base
+### **Step 3: Build Your Knowledge Base**  
 
-The knowledge base contains domain-specific information used for recommendations:
+The knowledge base contains domain-specific information used for recommendations:  
 
 ```python
 knowledge_base={
@@ -87,7 +82,7 @@ knowledge_base={
 }
 ```
 
-### Step 4: Initialize and Run Your System
+### **Step 4: Initialize and Run Your System**  
 
 ```python
 # Initialize the system
@@ -106,53 +101,54 @@ while True:
         print(f"Follow-up: {response.follow_up_question}")
 ```
 
-## Example Explained: Cannabis Recommendation System
+## **Example Explained: Cannabis Recommendation System**  
 
-The cannabis example demonstrates a complete implementation:
+The cannabis example demonstrates a complete implementation:  
 
-### State Breakdown
+### **State Breakdown**  
 
-1. **INITIAL_INQUIRY**:
-   - Collects: Main symptom and whether it's a medical query
-   - Goal: Understand why the user is seeking help
-   - Example: "What brings you here today?"
+1. **INITIAL_INQUIRY**:  
+   - Collects: Main symptom and whether it's a medical query  
+   - Goal: Understand why the user is seeking help  
+   - Example: "What brings you here today?"  
 
-2. **MEDICAL_ASSESSMENT**:
-   - Collects: Symptom details, medical history, lifestyle factors
-   - Goal: Build comprehensive understanding of medical needs
-   - Example: "How severe is your pain on a scale of 1-10?"
+2. **MEDICAL_ASSESSMENT**:  
+   - Collects: Symptom details, medical history, lifestyle factors  
+   - Goal: Build comprehensive understanding of medical needs  
+   - Example: "How severe is your pain on a scale of 1-10?"  
 
-3. **RECOMMENDATION**:
-   - Collects: Suitable products, usage guidelines, user preferences
-   - Goal: Generate personalized product recommendations
-   - Example: "Based on your symptoms, I recommend..."
+3. **RECOMMENDATION**:  
+   - Collects: Suitable products, usage guidelines, user preferences  
+   - Goal: Generate personalized product recommendations  
+   - Example: "Based on your symptoms, I recommend..."  
 
-4. **CONCLUSION**:
-   - Collects: User satisfaction, remaining concerns
-   - Goal: Ensure recommendations are understood
-   - Example: "Do you have any questions about these recommendations?"
+4. **CONCLUSION**:  
+   - Collects: User satisfaction, remaining concerns  
+   - Goal: Ensure recommendations are understood  
+   - Example: "Do you have any questions about these recommendations?"  
 
-### Key Design Tips
+### **Key Design Tips**  
 
-1. **State Order**: Arrange states in a logical conversation flow
-2. **Required Info**: Only include truly necessary information
-3. **Clear Goals**: Each state should have a distinct purpose
-4. **Knowledge Base**: Include all relevant categories for your domain
+1. **State Order**: Arrange states in a logical conversation flow  
+2. **Required Info**: Only include truly necessary information  
+3. **Clear Goals**: Each state should have a distinct purpose  
+4. **Knowledge Base**: Include all relevant categories for your domain  
 
-## Sample Conversation Flow
+<!-- ## **Sample Conversation Flow**  
 
-![Cannabis Workflow](state_machine/Cannabis_workflow.png)
+![Cannabis Workflow](./ToG.png)   -->
 
-## Future Improvements
+## **Future Improvements**  
 
-We're working on enhancing the system with:
+We're working on enhancing the system with:  
 
-- **Tree of Thoughts**: For exploring multiple reasoning paths
-  ![Tree of Thoughts](state_machine/tree_of_thoughts.jpeg)
+- **Tree of Thoughts**: For exploring multiple reasoning paths  
+  ![Tree of Thoughts](./tree_of_thoughts.jpeg)
 
-- **Knowledge Graph Integration**: For better concept relationships
-  ![Knowledge Graph](state_machine/ToG.png)
+- **Knowledge Graph Integration**: For better concept relationships  
+  ![Knowledge Graph](./ToG.png)  
 
-## License
+## **License**  
 
 This project is licensed under the MIT License.
+
