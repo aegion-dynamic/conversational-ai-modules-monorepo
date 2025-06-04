@@ -13,6 +13,7 @@ from pydantic import SecretStr
 from nlqs.database.postgres import PostgresDriver
 from nlqs.database.sqlite import SQLiteDriver
 from nlqs.parameters import OPENAI_API_KEY
+from utils.llm import get_default_llm
 
 
 # 1. pass the data in the databse
@@ -77,12 +78,7 @@ def get_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, Dict[str, str]
             ]
         )
 
-        llm = ChatOpenAI(
-            model="gpt-4o",
-            api_key=SecretStr(OPENAI_API_KEY),
-            temperature=0.0,
-            verbose=True,
-        )
+        llm = get_default_llm()
 
         output_parser = StrOutputParser()
         chain = prompt | llm | output_parser

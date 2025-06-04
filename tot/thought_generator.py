@@ -52,7 +52,8 @@ class ThoughtGenerator:
         Returns:
             List[str]: A list of generated thoughts.
         """
-        prompt = self.thought_generation_prompt.format(current_state=current_state, num_thoughts=num_thoughts)
+        prompt = self.thought_generation_prompt.format(
+            current_state=current_state, num_thoughts=num_thoughts)
 
         messages = [
             ChatCompletionSystemMessageParam(
@@ -72,7 +73,8 @@ class ThoughtGenerator:
         thoughts_text = response.choices[0].message.content
         if thoughts_text is not None:
             thoughts_text = thoughts_text.strip()
-            thoughts = [thought.split(". ", 1)[1] for thought in thoughts_text.split("\n") if ". " in thought]
+            thoughts = [thought.split(". ", 1)[1] for thought in thoughts_text.split(
+                "\n") if ". " in thought]
             return thoughts[:num_thoughts]
         else:
             raise Exception("No thoughts generated.")

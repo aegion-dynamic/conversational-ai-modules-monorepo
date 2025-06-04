@@ -18,6 +18,7 @@ from nlqs.query_construction import (
 from nlqs.summarization import summarize
 from nlqs.vectordb_driver import ChromaDBConfig, VectorDBDriver
 from nlqs.search_field import SearchField
+from utils.llm import get_default_llm
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -64,7 +65,7 @@ class NLQS:
         # Create the llm object
         # Initializes the ChatOpenAI LLM model
         # TODO: Rearchitect this so that we can switch models
-        self.llm = ChatOpenAI(temperature=0, model="gpt-4-turbo", api_key=SecretStr(OPENAI_API_KEY), max_tokens=1000)
+        self.llm = get_default_llm()
 
         # Initialize the Embedding model
         # TODO: Rearchitect this so that we can switch models

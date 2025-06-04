@@ -3,13 +3,6 @@
 ## Overview
 This monorepo is used to hold all the python modules used in the conversational chatbots. By consolidating all these projects under a single repository, we hope to reduce version conflicts and better manage the codebase.
 
-
-Load the `.env` file
-
-```sh
-set -o allexport; source .env; set +o allexport
-```
-
 ## Code guidelines:
 - Use poetry for all dependency management. If poetry is unable to add your depeendency, this means that your project will not work with the rest of packages. Poetry is meant to solve problems for you after you finish fighting with it.
 - Add type annotations for all functions arguments and returns
@@ -23,3 +16,9 @@ set -o allexport; source .env; set +o allexport
 - Name all classes CamelCase with captials starts
 - Avoid having `global` variables for libaries. Only applications are allowed to have them
   
+
+## Exporting the Environemtn variables for the backend
+
+```sh
+set -o allexport; source .env; set +o allexport
+```
