@@ -19,7 +19,7 @@ from tog.pipeline.exploration_loop import ExplorationLoop
 from tog.pipeline.entity_extractor import LLMExtractor, AzureOpenAIEntityExtractor
 from tog.pipeline.entity_mapper import EntityMapper
 from tog.pipeline.mapping_handler import Neo4jMappingHandler
-from tog.pipeline.main import KnowledgeGraphExplorer
+from tog.tog import ToG
 
 
 def initialize_explorer(config):
