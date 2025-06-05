@@ -127,20 +127,16 @@ class NLQS:
         column_descriptions_dict = self.vectordb_driver.retrieve_descriptions_and_types_from_db()
 
         if column_descriptions_dict is None:
-            raise ValueError("No data found in the database. Generate Column descriptions.")
-
-        # TODO: Get the primary key for the table
-        # primary_key = driver.get_primary_key(self.table_name)
+            raise ValueError("No data found in the database. Generate Column descriptions.")        # Get the primary key for the table
+        primary_key = driver.get_primary_key(self.table_name)
 
         # Chroma Collection
         chroma_data_collection = self.vectordb_driver.dataset_collection
 
         if chroma_data_collection is None:
-            raise ValueError("Chroma Collection not found in vectordb. Please create a collection.")
-
-        # Step 5
+            raise ValueError("Chroma Collection not found in vectordb. Please create a collection.")        # Step 5
         if not user_input.strip():
-            result = NLQSResult(records=[], uris=[])
+            return NLQSResult(records=[], uris=[])
 
         # Step 6
         user_input = re.sub(r"{|}", "", user_input)
@@ -197,9 +193,7 @@ class NLQS:
         # # Check if the user requested columns exist
         # for column in summarized_input.user_requested_columns:
         #     if column not in column_descriptions:
-        #         raise ValueError(f"Column {column} not found in the database.")
-
-        print("checking for user requested columns...")
+        #         raise ValueError(f"Column {column} not found in the database.")        print("checking for user requested columns...")
         if len(summarized_input.user_requested_columns) > 0:
             numerical_data = summarized_input.numerical_data
             categorical_data = summarized_input.categorical_data
@@ -207,111 +201,101 @@ class NLQS:
             identifier_data = summarized_input.identifier_data
 
             identifier_query_fragments = construct_quantitaive_search_query_fragments(identifier_data)
-            quantitaive_query_fragments = construct_quantitaive_search_query_fragments(numerical_data)
+            quantitative_query_fragments = construct_quantitaive_search_query_fragments(numerical_data)
             categorical_query_fragments = construct_categorical_search_query_fragments(categorical_data)
             descriptive_query_fragments = construct_descriptive_search_query_fragments(
                 descriptive_data, self.vectordb_driver
             )
 
             # Construct a search field that will capture all the data from the user input
-
             search_field_object = SearchField.construct_search_field(
                 descriptive_query_fragments=[
                     fragment for fragments in descriptive_query_fragments.values() for fragment in fragments
                 ],
                 categorical_query_fragments=categorical_query_fragments,
                 identifier_query_fragments=identifier_query_fragments,
-                quantitative_query_fragments=quantitaive_query_fragments,
+                quantitative_query_fragments=quantitative_query_fragments,
                 database_driver=self.connection_driver,
                 database_name=DEFAULT_DB_NAME,
                 table_name=DEFAULT_TABLE_NAME,
-            )
+            )# Get all search results from the search field
+            search_results = search_field_object.get_results()
+            print(f"Search results: {search_results}")
 
-            print(search_field_object.get_results())
+            # Extract primary keys from search results
+            all_primary_keys = []
+            if "default" in search_results:
+                for row in search_results["default"]:
+                    if row and len(row) > 0:
+                        # Assuming first column is primary key
+                        all_primary_keys.append(row[0])
 
-            # # Construct the final query
-            # # For now just pass the descriptive query fragments so that we don't have to worry about the other queries and the intersections
-            # # TODO: Figure out how to construct a single query that combines all the fragments and also combinations of the fragments (aka, intersections)
-            # for column, query_fragments in descriptive_query_fragments.items():
+            # Remove duplicates while preserving order
+            unique_primary_keys = list(dict.fromkeys(all_primary_keys))
+            
+            if not unique_primary_keys:
+                logger.info("No matching records found")
+                result = NLQSResult(records=[], uris=[])
+            else:
+                # Convert primary keys to string for SQL query
+                primary_keys_string = ",".join(str(pk) for pk in unique_primary_keys)
 
-            #     final_queries = construct_final_search_query(query_fragments, DEFAULT_DB_NAME, DEFAULT_TABLE_NAME)
-            #     print(final_queries)
-            #     # self.vectordb_driver.get_id_list_from_descriptions(
-            #     #     descriptions=descriptive_data, table_name=DEFAULT_TABLE_NAME, db_name=DEFAULT_DB_NAME
-            #     # )
+                # Get the columns in the order they appear in the database
+                columns_database = driver.get_database_columns(self.table_name)
 
-            # self.vectordb_driver.get_id_list_from_descriptions(
-            #     descriptions=descriptive_data, table_name=DEFAULT_TABLE_NAME, db_name=DEFAULT_DB_NAME
-            # )
+                # Variables for specific columns
+                uri_column = self.uri_column
+                output_columns = self.output_columns
 
-        #     quantitative_ids_uncleaned = driver.execute_query(quantitaive_query)
+                # If output_columns is specified, modify the query to select only those columns
+                if output_columns:
+                    # Ensure primary key is included for processing
+                    columns_to_select = output_columns.copy()
+                    if primary_key not in columns_to_select:
+                        columns_to_select.append(primary_key)
+                    if uri_column and uri_column not in columns_to_select:
+                        columns_to_select.append(uri_column)
+                    
+                    final_query = f"SELECT {','.join(col for col in columns_to_select)} FROM {self.table_name} WHERE {primary_key} IN ({primary_keys_string})"
+                    data_retrieved = driver.execute_query(final_query)
+                    columns_to_use = columns_to_select
+                else:
+                    # Execute the query to retrieve the data with all columns
+                    final_query = f"SELECT * FROM {self.table_name} WHERE {primary_key} IN ({primary_keys_string})"
+                    data_retrieved = driver.execute_query(final_query)
+                    columns_to_use = columns_database
 
-        #     quantitative_ids = []
+                # Initialize lists to hold records and URIs
+                records = []
+                uris = []
 
-        #     if quantitative_ids_uncleaned:
-        #         quantitative_ids = [item[0] for item in quantitative_ids_uncleaned]
-        #         print(f"quantitative_ids: {quantitative_ids}")
+                if not data_retrieved:
+                    result = NLQSResult(records=[], uris=[])
+                else:
+                    # Process the retrieved data
+                    for row in data_retrieved:
+                        record = dict(zip(columns_to_use, row))
+                        
+                        # Extract URI if specified
+                        if uri_column and uri_column in record:
+                            uris.append(str(record[uri_column]))
+                            if uri_column != primary_key:  # Don't delete primary key
+                                del record[uri_column]
+                        
+                        # Remove primary key from record if it's not in output_columns
+                        if output_columns and primary_key in record and primary_key not in output_columns:
+                            del record[primary_key]
+                        
+                        records.append(record)
 
-        #     qualitative_ids = qualitative_search(chroma_data_collection, categorical_data, primary_key)
-        #     print(f"qualitative_ids: {qualitative_ids}")
+                    # Create the result object
+                    result = NLQSResult(records=records, uris=uris)
 
-        #     # Find the intersection of quantitative_ids and qualitative_ids
-        #     if not quantitative_ids or not qualitative_ids:
-        #         intersection_ids = quantitative_ids or qualitative_ids
-        #     else:
-        #         intersection_ids = list(set(quantitative_ids) & set(qualitative_ids))
-
-        #     # Ensure intersection_ids is set to qualitative_ids if it's empty
-        #     if not intersection_ids:
-        #         intersection_ids = qualitative_ids
-
-        #     print(intersection_ids)
-
-        #     intersection_ids_string = ",".join(str(id) for id in intersection_ids)
-
-        #     # Initial query to retrieve all columns based on the intersection IDs
-        #     final_query = f"SELECT * FROM {self.table_name} WHERE {primary_key} IN ({intersection_ids_string})"
-
-        #     # Get the columns in the order they appear in the database
-        #     columns_database = driver.get_database_columns(self.table_name)
-
-        #     # Variables for specific columns
-        #     uri_column = self.uri_column
-        #     output_columns = self.output_columns
-
-        #     # If output_columns is specified, modify the query to select only those columns
-        #     if output_columns:
-        #         final_query = f"SELECT {','.join(col for col in output_columns)} FROM {self.table_name} WHERE {primary_key} IN ({intersection_ids_string})"
-        #         data_retreived = driver.execute_query(final_query)
-        #         # Since we now have a subset of columns, use output_columns directly
-        #         columns_to_use = output_columns
-        #     else:
-        #         # Execute the query to retrieve the data with all columns
-        #         data_retreived = driver.execute_query(final_query)
-        #         columns_to_use = columns_database
-
-        #     # Initialize lists to hold records and URIs
-        #     records = []
-        #     uris = []
-
-        #     if not data_retreived:
-        #         result = NLQSResult(records=[], uris=[])
-        #         return result
-
-        #     # Process the retrieved data
-        #     for row in data_retreived:
-        #         record = dict(zip(columns_to_use, row))
-        #         if uri_column in record:
-        #             uris.append(str(record[uri_column]))
-        #             del record[uri_column]  # Remove the URI column data from the record
-        #         records.append(record)
-
-        #     # Create the result object
-        #     result = NLQSResult(records=records, uris=uris)
-
-        #     print(f"result: {result}")
-        #     logger.info(f"result: {result}")
-        # else:
-        result = NLQSResult(records=[], uris=[])
+                logger.info(f"Query executed: {final_query}")
+                logger.info(f"Found {len(records)} records")
+                print(f"result: {result}")
+        else:
+            logger.info("No user requested columns found")
+            result = NLQSResult(records=[], uris=[])
 
         return result
