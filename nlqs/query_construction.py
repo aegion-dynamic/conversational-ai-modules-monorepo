@@ -54,8 +54,14 @@ def construct_quantitaive_search_query_fragments(quantitaive_data: Dict[str, str
         # Extract the value from the condition
         value = condition.replace(operator, "").strip()
 
-        # Construct the query part
-        query_part = f"{column} {operator} {value}"
+        # Special handling for CBD column to convert mg/g values
+        if column == "CBD":
+            # Use CAST and REPLACE to handle the mg/g unit conversion in SQLite
+            query_part = f"CAST(REPLACE(REPLACE({column}, ' mg/g', ''), ',', '.') AS DECIMAL) {operator} {value}"
+        else:
+            # Normal numeric comparison for other columns
+            query_part = f"{column} {operator} {value}"
+
         query_parts.append(query_part)
 
     return query_parts

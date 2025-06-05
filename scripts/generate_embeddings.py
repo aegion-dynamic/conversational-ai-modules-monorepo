@@ -1,22 +1,35 @@
 import json
-
+import os
 import pandas as pd
-from openai import OpenAI
+from openai import AzureOpenAI
 from tqdm import tqdm
+from dotenv import load_dotenv
+
+# Load environment variables 
+load_dotenv()
 
 # Initialize tqdm for pandas
 tqdm.pandas()
 
-client = OpenAI()
+# Initialize Azure OpenAI client
+client = AzureOpenAI(
+    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+    api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
+)
 
 # Load the CSV file into a pandas DataFrame
 csv_file_path = "./test_data/data_descriptions.csv"
 df = pd.read_csv(csv_file_path)
 
 
-# Function to generate embeddings
+# Function to generate embeddings using Azure OpenAI
 def generate_embeddings(text):
-    response = client.embeddings.create(input=[text], model="text-embedding-ada-002")
+    response = client.embeddings.create(
+        input=[text], 
+        model="text-embedding-ada-002",
+        deployment_id="text-embedding-ada-002"
+    )
     return response.data[0].embedding
 
 

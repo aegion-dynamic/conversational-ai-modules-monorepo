@@ -113,7 +113,7 @@ class NLQSDemo:
             print(f"\n❌ Error processing query: {str(e)}")
             
 def main():
-    """Run the NLQS demo with test queries."""
+    """Run the NLQS demo with a single test query."""
     logger.info("Starting NLQS demo...")
     
     # Initialize NLQS demo
@@ -122,16 +122,16 @@ def main():
     except Exception as e:
         logger.error(f"Failed to initialize NLQS demo: {str(e)}", exc_info=True)
         print(f"Failed to initialize NLQS: {str(e)}")
-        return    # Start with a single test query
+        return
+
+    # Test with a single query first
     test_query = "Show me products with high CBD content"
     
     logger.info("Starting test with a single query")
     print("Starting NLQS Demo...")
     print("=" * 50)
     
-    logger.info(f"Processing test query")
     demo.process_query(test_query)
-    print("\n" + "="*60 + "\n")
 
 if __name__ == "__main__":
     main()

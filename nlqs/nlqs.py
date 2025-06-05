@@ -3,6 +3,13 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple, Union
 
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from pydantic import SecretStr
 
@@ -18,7 +25,7 @@ from nlqs.query_construction import (
 from nlqs.summarization import summarize
 from nlqs.vectordb_driver import ChromaDBConfig, VectorDBDriver
 from nlqs.search_field import SearchField
-from utils.llm import get_default_llm
+from utils.llm import get_default_llm, get_default_embedding_function
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -50,105 +57,103 @@ class NLQS:
     def __init__(
         self, connection_config: Union[SQLiteConnectionConfig, PostgresConnectionConfig], chroma_config: ChromaDBConfig
     ) -> None:
-        # TODO - Figure out what the constructor parameters are
+        logger.info("Initializing NLQS...")
+        
+        # Initialize database connection
         if isinstance(connection_config, SQLiteConnectionConfig):
+            logger.info("Using SQLite database")
             self.connection_driver = SQLiteDriver(connection_config)
         elif isinstance(connection_config, PostgresConnectionConfig):
+            logger.info("Using PostgreSQL database")
             self.connection_driver = PostgresDriver(connection_config)
-
         else:
+            logger.error("Invalid connection configuration")
             raise ValueError("Invalid connection configuration")
 
         # Initialize the connection to the database
+        logger.debug("Connecting to database...")
         self.connection_driver.connect()
+        logger.info("Database connection established")
 
         # Create the llm object
-        # Initializes the ChatOpenAI LLM model
-        # TODO: Rearchitect this so that we can switch models
-        self.llm = get_default_llm()
+        logger.debug("Initializing LLM...")
+        self.llm = get_default_llm(use_azure=True)
+        logger.info("LLM initialized")
 
         # Initialize the Embedding model
-        # TODO: Rearchitect this so that we can switch models
-        embedding_model = OpenAIEmbeddings(api_key=SecretStr(OPENAI_API_KEY), model="text-embedding-ada-002")
-
-        # Create an embedding function
+        logger.debug("Initializing embedding model...")
+        embedding_model = get_default_embedding_function(use_azure=True) 
         embedding_function = embedding_model.embed_query
+        logger.info("Embedding model initialized")
 
         self.chroma_config = chroma_config
+        logger.debug("Initializing vector database...")
         self.vectordb_driver = VectorDBDriver(chroma_config, embedding_function=embedding_function)
+        logger.info("Vector database initialized")
 
         self.table_name = connection_config.dataset_table_name
         self.uri_column = connection_config.uri_column
         self.output_columns = connection_config.output_columns
 
         # Test if all infrastructure is available
+        logger.debug("Checking ChromaDB collections...")
         if self.vectordb_driver.check_nlqs_collections_exists() is False:
+            logger.error("ChromaDB collections do not exist")
             raise ValueError("ChromaDB collections do not exist. Please create them.")
+        logger.info("ChromaDB collections verified")
 
-    # Step 4
     def execute_nlqs_query_workflow(self, user_input: str, chat_history: List[Tuple[str, str]]) -> NLQSResult:
-        """This function is where the whole interaction happens.
-        It takes the user input and chat history as input and returns the response if the user's intent is either phatic_communication, profanity or sql_injection.
-        Else it returns the query result or search similarity result.
-
-        Args:
-            user_input (str): The user's input.
-            chat_history (list[(str, str)]): The chat history.
-
-        Returns:
-            result (NLQSResult): The result
-        """
-
-        # Overview
-        # Step 1 - retrieve descriptions and types from db. check if its empty. if not return the data.
-        # Step 2 - else if the retrived data was empty then generate new columns descriptions.
-        # Step 3 - next get the chroma collection
-        # Step 4 - pass all the retrieved data to the main_workflow method
-        # Step 5 - check if the user input is empty if true retun none
-        # Step 6 - Else remove the paranthesis from the user input.
-        # Step 7 - generate a summary for the user input the required format.
-        # Step 8 - check if the summary is empty. if true retry the generation of the summary, you can do this until five times
-        # (the above step is because we were getting errors while converting the generted summary to the json format.)
-        # Step 9 - generate an sql query.
-        # Step 10 - validate the generated query.
-        # Step 11 - check if the query result is empty. if true then do a similarity search and retrieve the relevent info and return it.
-        # Step 12 - else return the query result.
-
+        logger.info(f"Executing NLQS query workflow for input: {user_input}")
+        
         # Step 0 - Create the pre-requisite objects
         driver = self.connection_driver
-        
+
         # Retrieve descriptions and types from db
+        logger.debug("Retrieving column descriptions from vector database...")
         column_descriptions_dict = self.vectordb_driver.retrieve_descriptions_and_types_from_db()
         if column_descriptions_dict is None:
+            logger.error("No data found in the database")
             raise ValueError("No data found in the database. Generate Column descriptions.")
+        logger.debug("Column descriptions retrieved successfully")
 
         # Get the primary key for the table
         primary_key = driver.get_primary_key(self.table_name)
+        logger.debug(f"Using primary key: {primary_key}")
         
         # Get Chroma Collection
+        logger.debug("Getting Chroma collection...")
         chroma_data_collection = self.vectordb_driver.dataset_collection
-
         if chroma_data_collection is None:
+            logger.error("Chroma Collection not found")
             raise ValueError("Chroma Collection not found in vectordb. Please create a collection.")
+        logger.debug("Chroma collection retrieved successfully")
 
-        # Step 5
+        # Step 5 - check if the user input is empty
         if not user_input.strip():
+            logger.info("Empty user input received")
             return NLQSResult(records=[], uris=[])
 
-        # Step 6
+        # Step 6 - Remove curly braces from input
+        logger.debug("Processing user input...")
         user_input = re.sub(r"{|}", "", user_input)
 
-        # Step 7
-        summarized_input = summarize(
-            user_input=user_input,
-            chat_history=chat_history,
-            column_descriptions_dictionary=column_descriptions_dict["column_descriptions"],
-            numerical_columns=column_descriptions_dict["numerical_columns"],
-            categorical_columns=column_descriptions_dict["categorical_columns"],
-            descriptive_columns=column_descriptions_dict["descriptive_columns"],
-            llm=self.llm,
-            vectordb=self.vectordb_driver,
-        )
+        # Step 7 - Generate summary
+        logger.debug("Generating input summary...")
+        try:
+            summarized_input = summarize(
+                user_input=user_input,
+                chat_history=chat_history,
+                column_descriptions_dictionary=column_descriptions_dict["column_descriptions"],
+                numerical_columns=column_descriptions_dict["numerical_columns"],
+                categorical_columns=column_descriptions_dict["categorical_columns"],
+                descriptive_columns=column_descriptions_dict["descriptive_columns"],
+                llm=self.llm,
+                vectordb=self.vectordb_driver,
+            )
+            logger.debug(f"Generated summary: {summarized_input}")
+        except Exception as e:
+            logger.error(f"Error generating summary: {str(e)}", exc_info=True)
+            raise
 
         count = 0
         print(f"summarized_input: {summarized_input}")
