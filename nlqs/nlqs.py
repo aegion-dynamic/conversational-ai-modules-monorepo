@@ -115,26 +115,23 @@ class NLQS:
         # Step 12 - else return the query result.
 
         # Step 0 - Create the pre-requisite objects
-
         driver = self.connection_driver
-        # (
-        #     column_descriptions,
-        #     numerical_columns,
-        #     categorical_columns,
-        #     descriptive_columns,
-        # )
-
+        
+        # Retrieve descriptions and types from db
         column_descriptions_dict = self.vectordb_driver.retrieve_descriptions_and_types_from_db()
-
         if column_descriptions_dict is None:
-            raise ValueError("No data found in the database. Generate Column descriptions.")        # Get the primary key for the table
-        primary_key = driver.get_primary_key(self.table_name)
+            raise ValueError("No data found in the database. Generate Column descriptions.")
 
-        # Chroma Collection
+        # Get the primary key for the table
+        primary_key = driver.get_primary_key(self.table_name)
+        
+        # Get Chroma Collection
         chroma_data_collection = self.vectordb_driver.dataset_collection
 
         if chroma_data_collection is None:
-            raise ValueError("Chroma Collection not found in vectordb. Please create a collection.")        # Step 5
+            raise ValueError("Chroma Collection not found in vectordb. Please create a collection.")
+
+        # Step 5
         if not user_input.strip():
             return NLQSResult(records=[], uris=[])
 
@@ -189,11 +186,12 @@ class NLQS:
 
         # This is the standard workflow for the NLQS
 
-        # TODO: We should reenable this
-        # # Check if the user requested columns exist
+        # TODO: We should reenable this        # # Check if the user requested columns exist
         # for column in summarized_input.user_requested_columns:
         #     if column not in column_descriptions:
-        #         raise ValueError(f"Column {column} not found in the database.")        print("checking for user requested columns...")
+        #         raise ValueError(f"Column {column} not found in the database.")
+
+        print("checking for user requested columns...")
         if len(summarized_input.user_requested_columns) > 0:
             numerical_data = summarized_input.numerical_data
             categorical_data = summarized_input.categorical_data
@@ -218,7 +216,9 @@ class NLQS:
                 database_driver=self.connection_driver,
                 database_name=DEFAULT_DB_NAME,
                 table_name=DEFAULT_TABLE_NAME,
-            )# Get all search results from the search field
+            )
+
+            # Get all search results from the search field
             search_results = search_field_object.get_results()
             print(f"Search results: {search_results}")
 
