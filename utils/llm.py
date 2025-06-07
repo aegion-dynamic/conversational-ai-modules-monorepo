@@ -1,3 +1,4 @@
+from typing import Optional
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings, ChatOpenAI
 from utils.parameters import (
     AZURE_OPENAI_EMBEDDING_ENDPOINT,
@@ -30,7 +31,7 @@ def get_default_llm(use_azure: bool = True):
         )
 
 
-def get_default_embedding_function(use_azure: bool = True):
+def get_default_embedding_function(use_azure: bool = True) -> Optional[AzureOpenAIEmbeddings]:
     """Returns the default embedding function, either from Azure OpenAI or OpenAI."""
     if use_azure:
         return AzureOpenAIEmbeddings(
