@@ -9,6 +9,7 @@ import uuid
 import pandas as pd
 import psycopg2
 import pytest
+from langchain_openai import OpenAIEmbeddings
 from langchain_openai import AzureOpenAIEmbeddings
 from pydantic import SecretStr
 
@@ -16,6 +17,7 @@ from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
 from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME
 from nlqs.vectordb_driver import ChromaDBConfig, VectorDBDriver
+from utils.llm import get_default_embedding_function
 
 
 @pytest.fixture(scope="function")
@@ -199,12 +201,7 @@ def embedding_function() -> (
 ):
 
     # Initialize the Azure OpenAI Embedding model
-    embedding_model = AzureOpenAIEmbeddings(
-        model="text-embedding-ada-002",
-        api_key=SecretStr(os.getenv("AZURE_OPENAI_API_KEY")),
-        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"), 
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
-    )
+    embedding_model = get_default_embedding_function(use_azure=True)
 
     # Create an embedding function
     embedding_function = embedding_model.embed_query

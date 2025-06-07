@@ -11,6 +11,7 @@ from sqlalchemy import column
 from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME
 from nlqs.vectordb_driver import ColumnType, DataCollectionMetadata, VectorDBDriver
 from utils.json_outputs import validate_llm_output_keys
+from langchain_core.output_parsers import JsonOutputParser
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -91,112 +92,86 @@ def summarize(
 ) -> SummarizedInput:
     """Summarizes the user input and returns the summary, quantitative data, and qualitative data, along with the user requested columns in a JSON format."""
 
-    # Format the prompt template carefully with proper escaping
-    prompt = """Process the following request and output a structured response:
+    # Format the prompt template with column information
+    available_columns = list(column_descriptions_dictionary.keys())
+    column_descriptions = "\n".join([f"- {col}: {desc}" for col, desc in column_descriptions_dictionary.items()])
+    
+    prompt = f"""You are an expert at analyzing user queries and extracting structured information.
 
-User request: {input}
+User request: {{input}}
 
-Your task is to:
-1. Analyze the request for any mentions of CBD content:
-   - "high CBD" or "high CBD content" means ">15"
-   - "low CBD" means "<5"
-   - "medium CBD" means "5-15"
+Available database columns and their descriptions:
+{column_descriptions}
 
-2. Return ONLY a JSON object with this EXACT structure:
-   {{
-     "summary": "Brief description of request",
-     "numerical_data": {{"CBD": ">15"}},  
-     "categorical_data": {{}},
-     "descriptive_data": {{}},
-     "user_requested_columns": ["Product", "URL"],
-     "user_intent": "search"
-   }}
+Analyze the user request and extract:
+1. Summary: Brief description of what the user wants
+2. Numerical data: Extract any numerical filters/conditions (e.g., "age > 25", "price < 100")
+3. Categorical data: Extract any categorical filters (e.g., "type = electronics", "status = active")
+4. Descriptive data: Extract any text-based search terms or descriptions
+5. User requested columns: Which columns the user wants to see in results
+6. User intent: What the user wants to do (search, analyze, compare, etc.)
 
-3. For CBD values:
-   - Always use exactly ">15" for high CBD
-   - Always use exactly "<5" for low CBD
-   - Always use "5-15" for medium CBD
-   - Include "CBD" key in numerical_data for any CBD query
+Return ONLY a JSON object with this structure:
+{{
+  "summary": "Brief description of request",
+  "numerical_data": {{}}, 
+  "categorical_data": {{}},
+  "descriptive_data": {{}},
+  "user_requested_columns": [],
+  "user_intent": "search"
+}}
 
-4. Include these columns in user_requested_columns:
-   - "Product" must always be included
-   - "URL" must always be included
+Guidelines:
+- For numerical_data: Use format like {{"column_name": "operator value"}} (e.g., {{"age": ">25", "price": "<100"}})
+- For categorical_data: Use format like {{"column_name": "value"}} (e.g., {{"category": "electronics"}})
+- For descriptive_data: Use format like {{"column_name": "search_term"}} for text searches
+- For user_requested_columns: Include column names the user wants to see
+- If no specific columns mentioned, leave user_requested_columns empty
 
-Do not include any other text or formatting in your response, just the JSON object."""
-
+Do not include any other text or formatting, just the JSON object."""
+    
     intent_classification_prompt = ChatPromptTemplate.from_template(prompt)
 
-    output_parser = StrOutputParser()
+    output_parser = JsonOutputParser()
     chain = intent_classification_prompt | llm | output_parser
     
-    # Get the raw output and clean it
-    raw_output = str(chain.invoke({"input": user_input}))
+    # Get the parsed JSON output directly
+    data_dict = chain.invoke({"input": user_input})
     
-    # Clean up the output by removing any markdown formatting or backticks
-    cleaned_output = raw_output.replace("```json", "").replace("```", "").strip()
+    print(f"parsed output : {data_dict} and is type {type(data_dict)}")
     
-    print(f"cleaned output: {cleaned_output}")
+    # Handle the case where JsonOutputParser returns a string instead of dict
+    if isinstance(data_dict, str):
+        try:
+            data_dict = json.loads(data_dict)
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing JSON string: {str(e)}")
+            data_dict = {}
     
-    try:
-        data_dict = json.loads(cleaned_output)
-        
-        # Ensure we have all required fields with defaults
-        required_fields = {
-            "summary": user_input,
-            "numerical_data": {"CBD": ">15"} if "high" in user_input.lower() and "cbd" in user_input.lower() else {},
-            "categorical_data": {},
-            "descriptive_data": {},
-            "user_requested_columns": ["Product", "URL"],
-            "user_intent": "search"
-        }
-        
-        # Fill in missing fields with defaults
-        for field, default in required_fields.items():
-            if field not in data_dict or not data_dict[field]:
-                data_dict[field] = default
-                
-        # Always ensure Product and URL are in requested columns
-        if "Product" not in data_dict["user_requested_columns"]:
-            data_dict["user_requested_columns"].append("Product")
-        if "URL" not in data_dict["user_requested_columns"]:
-            data_dict["user_requested_columns"].append("URL")
-        
-        # Special handling for CBD in high CBD queries
-        if (
-            "high" in user_input.lower() 
-            and "cbd" in user_input.lower()
-            and (
-                "numerical_data" not in data_dict
-                or "CBD" not in data_dict["numerical_data"]
-                or not data_dict["numerical_data"]["CBD"]
-            )
-        ):
-            if "numerical_data" not in data_dict:
-                data_dict["numerical_data"] = {}
-            data_dict["numerical_data"]["CBD"] = ">15"
+    # Ensure we have all required fields with defaults
+    required_fields = {
+        "summary": user_input,
+        "numerical_data": {},
+        "categorical_data": {},
+        "descriptive_data": {},
+        "user_requested_columns": [],
+        "user_intent": "search"
+    }
+    
+    # Fill in missing fields with defaults
+    for field, default in required_fields.items():
+        if field not in data_dict or data_dict[field] is None:
+            data_dict[field] = default
             
-        return SummarizedInput(
-            summary=data_dict["summary"],
-            numerical_data=data_dict["numerical_data"],
-            categorical_data=data_dict["categorical_data"],
-            descriptive_data=data_dict["descriptive_data"],
-            identifier_data={},  # This field is not used but required by the class
-            user_requested_columns=data_dict["user_requested_columns"],
-            user_intent=data_dict["user_intent"]
-        )
-
-    except json.JSONDecodeError as e:
-        logger.error(f"Error parsing JSON: {str(e)}")
-        # Return default structure for high CBD query
-        return SummarizedInput(
-            summary=user_input,
-            numerical_data={"CBD": ">15"} if "high" in user_input.lower() and "cbd" in user_input.lower() else {},
-            categorical_data={},
-            descriptive_data={},
-            identifier_data={},
-            user_requested_columns=["Product", "URL"],
-            user_intent="search"
-        )
+    return SummarizedInput(
+        summary=data_dict["summary"],
+        numerical_data=data_dict["numerical_data"],
+        categorical_data=data_dict["categorical_data"],
+        descriptive_data=data_dict["descriptive_data"],
+        identifier_data={},  # This field is not used but required by the class
+        user_requested_columns=data_dict["user_requested_columns"],
+        user_intent=data_dict["user_intent"]
+    )
 
 
 def get_validated_user_requested_columns(
