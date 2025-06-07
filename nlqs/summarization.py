@@ -11,7 +11,6 @@ from sqlalchemy import column
 from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME
 from nlqs.vectordb_driver import ColumnType, DataCollectionMetadata, VectorDBDriver
 from utils.json_outputs import validate_llm_output_keys
-from langchain_core.output_parsers import JsonOutputParser
 
 # Create a logger object
 logger = logging.getLogger(__name__)
@@ -59,7 +58,7 @@ REFERENCE_SUMMARIZED_OUTPUT_DICT = {
 
 # Default system prompt for the LLM.
 DEFAULT_SYSTEM_PROMPT = (
-    "You are a professional medical assistant, adept at handling inquiries related to medical products."
+    "You are a professional data assistant, adept at handling inquiries across various domains and data types."
 )
 
 
@@ -90,88 +89,355 @@ def summarize(
     llm: Union[ChatOpenAI, OpenAI],
     vectordb: VectorDBDriver,
 ) -> SummarizedInput:
-    """Summarizes the user input and returns the summary, quantitative data, and qualitative data, along with the user requested columns in a JSON format."""
+    """Summarizes the user input and returns the summary, quantitative data, and qualitative data, along with the user requested columns in a JSON format.
 
-    # Format the prompt template with column information
-    available_columns = list(column_descriptions_dictionary.keys())
-    column_descriptions = "\n".join([f"- {col}: {desc}" for col, desc in column_descriptions_dictionary.items()])
-    
-    prompt = f"""You are an expert at analyzing user queries and extracting structured information.
+    Args:
+        user_input (str): The user input.
+        chat_history (list[(str, str)]): The chat history.
+        column_descriptions (dict[str, str]): The column descriptions.
+        numerical_columns (list[str]): The numerical columns.
+        categorical_columns (list[str]): The categorical columns.
+        llm (Union[ChatOpenAI, OpenAI]): The LLM object.(Contains the details of the language we are using.)
 
-User request: {{input}}
+    Returns:
+        dict: {
+            "summary": str,
+            "numerical_data": {
+                "column name : str" : "Data mentioned about that column by the user : str",
+                "column name : str" : "Data mentioned about that column by the user : str",
+                "column name : str" : "Data mentioned about that column by the user : str",
+            },
+            "categorical_data": {
+                "column name : str" : "Data mentioned about that column by the user : str",
+                "column name : str" : "Data mentioned about that column by the user : str",
+                "column name : str" : "Data mentioned about that column by the user : str",
+            },
+            "descriptive_data": {
+                "column name : str" : "Data mentioned about that column by the user : str",
+                "column name : str" : "Data mentioned about that column by the user : str",
+                "column name : str" : "Data mentioned about that column by the user : str",
+            },
+            "user_requested_columns": list,
+            "user_intent":str,
+        }
+    """
 
-Available database columns and their descriptions:
-{column_descriptions}
+    # Updated NLQS Algorithm:
+    # 1. Extract a list of qualitative and quantitative statements from the user input along with the user intent.
+    # 2. Identify the relevant columns from the data based on the statements extracted and available column descriptions.
+    # 3. Generate a structured output in JSON format with the summary, numerical data, categorical data, descriptive data,
+    # user requested columns, and user intent.
+    intent_classification_prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                f"""
+                You will receive a user input and the chat history. Your task is to:
+                
+                1. **Single-Word Queries**: If the user input is a single word or very short (e.g., one or two words), provide a direct response if possible. If the query is unclear, prompt the user to elaborate.
+                - Example response: "It seems you're asking about something specific. Could you provide more details?"
 
-Analyze the user request and extract:
-1. Summary: Brief description of what the user wants
-2. Numerical data: Extract any numerical filters/conditions (e.g., "age > 25", "price < 100")
-3. Categorical data: Extract any categorical filters (e.g., "type = electronics", "status = active")
-4. Descriptive data: Extract any text-based search terms or descriptions
-5. User requested columns: Which columns the user wants to see in results
-6. User intent: What the user wants to do (search, analyze, compare, etc.)
+                2. **Structured Analysis**: For all other inputs, analyze the user input and identify key details based on our available data and chat history.
+                  3. Summarize the input, classifying the statements made by the user into qualitative and quantitative categories.
+                
+                4. Identify relevant columns from which we can provide an answer. Pay close attention to the user's intent and specific mentions of data columns:
+                - Are they seeking information about specific entities, categories, or data types?
+                - Look for explicit mentions of column names, synonyms, or phrases that indicate the type of information requested. If the user specifies certain attributes or metrics, consider these as user-requested columns.
 
-Return ONLY a JSON object with this structure:
-{{
-  "summary": "Brief description of request",
-  "numerical_data": {{}}, 
-  "categorical_data": {{}},
-  "descriptive_data": {{}},
-  "user_requested_columns": [],
-  "user_intent": "search"
-}}
+                5. Classify the user's intent. Possible intents include: phatic_communication, sql_injection, profanity, and other.
 
-Guidelines:
-- For numerical_data: Use format like {{"column_name": "operator value"}} (e.g., {{"age": ">25", "price": "<100"}})
-- For categorical_data: Use format like {{"column_name": "value"}} (e.g., {{"category": "electronics"}})
-- For descriptive_data: Use format like {{"column_name": "search_term"}} for text searches
-- For user_requested_columns: Include column names the user wants to see
-- If no specific columns mentioned, leave user_requested_columns empty
+                6. Output the result in a JSON format.
 
-Do not include any other text or formatting, just the JSON object."""
-    
-    intent_classification_prompt = ChatPromptTemplate.from_template(prompt)
+                7. Do not output any other information except the JSON. Do not add [OUT], [/OUT] to the output.(!important)
+                  The output JSON should have the following structure:
+                `
+                    "summary": "summary of the user input",
+                    "qualitative_statements":
+                                        [
+                                            "statement 1",
+                                            "statement 2",
+                                            "statement 3"
+                                        ],
+                    "quantitative_statements":
+                                        [
+                                            "statement 1",
+                                            "statement 2",
+                                            "statement 3"
+                                        ],                    
+                    "user_intent": "The user's intent. If none, leave it as an empty string.",
+                `
+                
+                chat history: {chat_history}
 
-    output_parser = JsonOutputParser()
-    chain = intent_classification_prompt | llm | output_parser
-    
-    # Get the parsed JSON output directly
-    data_dict = chain.invoke({"input": user_input})
-    
-    print(f"parsed output : {data_dict} and is type {type(data_dict)}")
-    
-    # Handle the case where JsonOutputParser returns a string instead of dict
-    if isinstance(data_dict, str):
-        try:
-            data_dict = json.loads(data_dict)
-        except json.JSONDecodeError as e:
-            logger.error(f"Error parsing JSON string: {str(e)}")
-            data_dict = {}
-    
-    # Ensure we have all required fields with defaults
-    required_fields = {
-        "summary": user_input,
-        "numerical_data": {},
-        "categorical_data": {},
-        "descriptive_data": {},
-        "user_requested_columns": [],
-        "user_intent": "search"
-    }
-    
-    # Fill in missing fields with defaults
-    for field, default in required_fields.items():
-        if field not in data_dict or data_dict[field] is None:
-            data_dict[field] = default
-            
-    return SummarizedInput(
-        summary=data_dict["summary"],
-        numerical_data=data_dict["numerical_data"],
-        categorical_data=data_dict["categorical_data"],
-        descriptive_data=data_dict["descriptive_data"],
-        identifier_data={},  # This field is not used but required by the class
-        user_requested_columns=data_dict["user_requested_columns"],
-        user_intent=data_dict["user_intent"]
+                Now, summarize the user input, chat history and provide the structured output in JSON format.
+                """,
+            ),
+            ("human", f"{user_input}"),
+        ]
     )
+
+    output_parser = StrOutputParser()
+    chain = intent_classification_prompt | llm | output_parser
+
+    summarized_input_intent = str(chain.invoke({"user_input": user_input}))
+
+    try:
+        # Attempt to parse the summarized input as JSON
+        summarized_input_dict = json.loads(summarized_input_intent)
+
+        missing_keys = validate_llm_output_keys(
+            llm_output=summarized_input_dict, reference_dict=REFERENCE_SUMMARIZED_INTENT_DICT
+        )
+
+        if len(missing_keys) > 0:
+            logger.error(f"Missing keys in summarized_input_dict: {missing_keys}")
+            raise ValueError("Missing keys in summarized_input_dict")
+        else:
+            # Insert into typed dict for summarized intent
+            summarized_input_intent = InputIntent(
+                summary=summarized_input_dict["summary"],
+                user_intent=summarized_input_dict["user_intent"],
+                qualitative_statements=summarized_input_dict["qualitative_statements"],
+                quantitative_statements=summarized_input_dict["quantitative_statements"],
+            )
+
+    except json.JSONDecodeError:
+        # If parsing fails, return an empty SummarizedInput
+        logger.error(f"Error parsing summarized_input_intent for user input: {user_input}")
+        summarized_input_intent = InputIntent(
+            summary="", user_intent="", qualitative_statements=[], quantitative_statements=[]
+        )
+
+    column_descriptions = list(column_descriptions_dictionary.items())
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                f"""
+                You will receive a user input and the chat history, and the set of qualitative and quantitative statements within the input. Your task is to:
+                
+                1. **Single-Word Queries**: If the user input is a single word or very short (e.g., one or two words), provide a direct response if possible. If the query is unclear, prompt the user to elaborate.
+                - Example response: "It seems you're asking about something specific. Could you provide more details?"
+
+                2. **Structured Analysis**: For all other inputs, analyze the user input and identify key details based on our available data and chat history.
+                
+                3. Summarize the input, classifying the data into qualitative and quantitative categories.
+                  4. Identify relevant columns from which we can provide an answer. Pay close attention to the user's intent and specific mentions of data columns:
+                - Are they seeking information about specific entities, categories, or data types?
+                - Look for explicit mentions of column names, synonyms, or phrases that indicate the type of information requested. If the user specifies certain attributes or metrics, consider these as user-requested columns.
+
+                5. Classify the user's intent. Possible intents include: phatic_communication, sql_injection, profanity, and other.
+
+                6. Output the result in a JSON format.
+
+                7. Do not output any other information except the JSON. Do not add [OUT], [/OUT] to the output.(!important)
+                
+                The output JSON should have the following structure:
+                `
+                    "quantitiave_data":
+                                        ` 
+                                        "column name": "Data mentioned about that column by the user. Example- < 4",
+                                        "column name": "Data mentioned about that column by the user. Example- > 6.215",
+                                        "column name": "Data mentioned about that column by the user. Example- >= 3.14 or <= 2.718",
+                                        `,
+                    "qualitative_data": 
+                                        ` 
+                                        "column name": "Data mentioned about that column by the user",
+                                        "column name": "Data mentioned about that column by the user",
+                                        "column name": "Data mentioned about that column by the user",
+                                        `,
+                    "user_requested_columns": "List of columns the user wants data from. If none, leave it as an empty list.",
+                `
+                
+                The data we have and chat history:
+                Data:{column_descriptions}\n\n 
+                Qualitative statements: {summarized_input_intent['qualitative_statements']}\n\n
+                Quantitative statements: {summarized_input_intent['quantitative_statements']}\n\n
+                numerical columns in the data: {numerical_columns}\n\n 
+                categorical columns in the data: {categorical_columns}\n\n
+                descriptive columns in the data: {descriptive_columns}\n\n 
+                chat history: {chat_history}
+
+                Now, summarize the user input, chat history and provide the structured output in JSON format.
+                """,
+            ),
+            ("human", f"{user_input}"),
+        ]
+    )
+
+    # print(f"prompt: {prompt}")
+    output_parser = StrOutputParser()
+    chain = prompt | llm | output_parser
+
+    summarized_input_str = str(chain.invoke({"user_input": user_input}))
+
+    print(f"summarized_input_intent: {summarized_input_str}")
+
+    print("------------------------------------------------------------------------")
+
+    try:
+        # Attempt to parse the summarized input as JSON
+        summarized_input_dict = json.loads(summarized_input_str)
+
+        missing_keys = validate_llm_output_keys(
+            llm_output=summarized_input_dict, reference_dict=REFERENCE_SUMMARIZED_OUTPUT_DICT
+        )
+
+        if len(missing_keys) > 0:
+            logger.error(f"Missing keys in summarized_input_dict: {missing_keys}")
+            raise ValueError("Missing keys in summarized_input_dict")
+
+    except json.JSONDecodeError:
+        # If parsing fails, return an empty SummarizedInput
+        summarized_input_dict = {}
+
+    logger.info("--------------------------")
+    logger.info(f"user input: {user_input}")
+    logger.info(f"Summarized input: {summarized_input_dict}")
+
+    # Validate the qualitative and quantitative columns against the available data columns /
+    # pick the most relevant columns
+    numerical_data = {}
+    categorical_data = {}
+    descriptive_data = {}
+    identifier_data = {}
+
+    # TODO: In the future this should also find the corresponding table from the databse
+    # For now, we will use the default table and default db
+
+    # Go through each of the qualitative and quantitative maps check if the column is present in the data
+    for column_name, description in summarized_input_dict.get("quantitative_data", {}).items():
+        if column_name not in column_descriptions_dictionary:
+            closest_column_name, column_type = vectordb.get_closest_column_from_description(
+                approximate_column_name=column_name,
+                users_description=description,
+                sample_data_strings=[],
+                database_name=DEFAULT_DB_NAME,
+                table_name=DEFAULT_TABLE_NAME,
+            )
+
+            if closest_column_name not in column_descriptions_dictionary:
+                raise ValueError(f"Closest column name '{closest_column_name}' not found in chroma columns collection.")
+
+            # Add the column to the corresponding dictionary
+            if column_type == ColumnType.NUMERICAL:
+                numerical_data[closest_column_name] = description
+            elif column_type == ColumnType.CATEGORICAL:
+                categorical_data[closest_column_name] = description
+            elif column_type == ColumnType.DESCRIPTIVE:
+                descriptive_data[closest_column_name] = description
+            elif column_type == ColumnType.IDENTIFIER:
+                identifier_data[closest_column_name] = description
+            else:
+                raise ValueError(f"Invalid column type '{column_type}' for column '{closest_column_name}'")
+
+        else:
+            # Add the column to the corresponding dictionary
+            numerical_data[column_name] = description
+
+    for column_name, description in summarized_input_dict.get("qualitative_data", {}).items():
+        if column_name not in column_descriptions_dictionary.keys():
+            closest_column_name, column_type = vectordb.get_closest_column_from_description(
+                approximate_column_name=column_name,
+                users_description=description,
+                sample_data_strings=[],
+                database_name=DEFAULT_DB_NAME,
+                table_name=DEFAULT_TABLE_NAME,
+            )
+
+            if closest_column_name not in column_descriptions_dictionary:
+                raise ValueError(f"Closest column name '{closest_column_name}' not found in chroma columns collection.")
+
+            if column_type == ColumnType.NUMERICAL:
+                numerical_data[closest_column_name] = description
+            elif column_type == ColumnType.CATEGORICAL:
+                categorical_data[closest_column_name] = description
+            elif column_type == ColumnType.DESCRIPTIVE:
+                descriptive_data[closest_column_name] = description
+            elif column_type == ColumnType.IDENTIFIER:
+                identifier_data[closest_column_name] = description
+            else:
+                raise ValueError(f"Invalid column type '{column_type}' for column '{closest_column_name}'")
+
+        else:
+            # Add the column to the corresponding dictionary after checking the column type
+            column_type = vectordb.get_column_type(column_name, DEFAULT_TABLE_NAME, DEFAULT_DB_NAME)
+            if column_type == ColumnType.NUMERICAL:
+                numerical_data[column_name] = description
+            elif column_type == ColumnType.CATEGORICAL:
+                categorical_data[column_name] = description
+            elif column_type == ColumnType.DESCRIPTIVE:
+                descriptive_data[column_name] = description
+            elif column_type == ColumnType.IDENTIFIER:
+                identifier_data[column_name] = description
+            else:
+                raise ValueError(f"Invalid column type '{column_type}' for column '{column_name}'")
+
+    for column_name, description in summarized_input_dict.get("quantitative_data", {}).items():
+        if column_name not in column_descriptions_dictionary.keys():
+            closest_column_name, column_type = vectordb.get_closest_column_from_description(
+                approximate_column_name=column_name,
+                users_description=description,
+                sample_data_strings=[],
+                database_name=DEFAULT_DB_NAME,
+                table_name=DEFAULT_TABLE_NAME,
+            )
+
+            if closest_column_name not in column_descriptions_dictionary:
+                raise ValueError(f"Closest column name '{closest_column_name}' not found in chroma columns collection.")
+
+            if column_type == ColumnType.NUMERICAL:
+                numerical_data[closest_column_name] = description
+
+            else:
+                logger.warning(
+                    f"Warning ! column type '{column_type}' for column '{closest_column_name}' is not numerical as expected."
+                )
+
+                if column_type == ColumnType.CATEGORICAL:
+                    categorical_data[closest_column_name] = description
+                elif column_type == ColumnType.DESCRIPTIVE:
+                    descriptive_data[closest_column_name] = description
+                elif column_type == ColumnType.IDENTIFIER:
+                    identifier_data[closest_column_name] = description
+                else:
+                    raise ValueError(f"Invalid column type '{column_type}' for column '{closest_column_name}'")
+
+        else:
+            # Add the column to the corresponding dictionary
+            column_type = vectordb.get_column_type(column_name, DEFAULT_TABLE_NAME, DEFAULT_DB_NAME)
+            if column_type == ColumnType.NUMERICAL:
+                numerical_data[column_name] = description
+
+            else:
+                logger.warning(
+                    f"Warning ! column type '{column_type}' for column '{column_name}' is not numerical as expected."
+                )
+
+                if column_type == ColumnType.CATEGORICAL:
+                    categorical_data[column_name] = description
+                elif column_type == ColumnType.DESCRIPTIVE:
+                    descriptive_data[column_name] = description                
+                elif column_type == ColumnType.IDENTIFIER:
+                    identifier_data[column_name] = description
+                else:
+                    raise ValueError(f"Invalid column type '{column_type}' for column '{column_name}'")
+
+    summazied_user_requested_columns: List[str] = summarized_input_dict.get("user_requested_columns", [])
+    get_validated_user_requested_columns(vectordb, summazied_user_requested_columns, DEFAULT_TABLE_NAME, DEFAULT_DB_NAME)
+
+    summarized_input = SummarizedInput(
+        summary=summarized_input_intent["summary"],
+        numerical_data=numerical_data,
+        categorical_data=categorical_data,
+        descriptive_data=descriptive_data,
+        identifier_data=identifier_data,
+        user_requested_columns=summarized_input_dict.get("user_requested_columns", []),
+        user_intent=summarized_input_intent["user_intent"],
+    )
+
+    return summarized_input
 
 
 def get_validated_user_requested_columns(
@@ -221,6 +487,7 @@ def get_validated_user_requested_columns(
         ret.append(closest_column_name)
 
     return ret
+
 
 
 # def qualitaive_search(collection: chromadb.Collection, data: Dict[str, str], primary_key: str) -> List[str]:
