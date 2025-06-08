@@ -10,17 +10,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from langchain_openai import AzureOpenAIEmbeddings, ChatOpenAI, OpenAIEmbeddings
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from pydantic import SecretStr
 
 from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
-from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME
+from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME, OPENAI_API_KEY
 from nlqs.query_construction import (
     construct_categorical_search_query_fragments,
     construct_descriptive_search_query_fragments,
     construct_final_search_query,
     construct_quantitaive_search_query_fragments,
+    construct_identifier_search_query_fragments,  # Added this import
 )
 from nlqs.summarization import summarize
 from nlqs.vectordb_driver import ChromaDBConfig, VectorDBDriver
@@ -58,8 +59,18 @@ class NLQS:
         self, connection_config: Union[SQLiteConnectionConfig, PostgresConnectionConfig], chroma_config: ChromaDBConfig
     ) -> None:
         logger.info("Initializing NLQS...")
-
-        self.connection_driver = self._get_connection_driver(connection_config)
+        
+        # Initialize database connection
+        self.connection_config = connection_config
+        if isinstance(connection_config, SQLiteConnectionConfig):
+            logger.info("Using SQLite database")
+            self.connection_driver = SQLiteDriver(connection_config)
+        elif isinstance(connection_config, PostgresConnectionConfig):
+            logger.info("Using PostgreSQL database")
+            self.connection_driver = PostgresDriver(connection_config)
+        else:
+            logger.error("Invalid connection configuration")
+            raise ValueError("Invalid connection configuration")
 
         # Initialize the connection to the database
         logger.debug("Connecting to database...")
@@ -67,47 +78,33 @@ class NLQS:
         logger.info("Database connection established")
 
         # Create the llm object
-        self.llm = self._iniitalize_llm()
+        logger.debug("Initializing LLM...")
+        self.llm = get_default_llm(use_azure=True)
+        logger.info("LLM initialized")
 
-        # Intialize vector DB driver
-        self.vectordb_driver = self._initialize_vectordb_driver(chroma_config )
+        # Initialize the Embedding model
+        logger.debug("Initializing embedding model...")
+        embedding_model = get_default_embedding_function(use_azure=True) 
+        embedding_function = embedding_model.embed_query
+        logger.info("Embedding model initialized")
+
+        self.chroma_config = chroma_config
+        logger.debug("Initializing vector database...")
+        self.vectordb_driver = VectorDBDriver(chroma_config, embedding_function=embedding_function)
+        logger.info("Vector database initialized")
 
         self.table_name = connection_config.dataset_table_name
         self.uri_column = connection_config.uri_column
         self.output_columns = connection_config.output_columns
 
-        # Test infrastructure
-        self._test_infrastructure()
-        
+        # Test if all infrastructure is available
+        logger.debug("Checking ChromaDB collections...")
+        if self.vectordb_driver.check_nlqs_collections_exists() is False:
+            logger.error("ChromaDB collections do not exist")
+            raise ValueError("ChromaDB collections do not exist. Please create them.")
+        logger.info("ChromaDB collections verified")
+
     def execute_nlqs_query_workflow(self, user_input: str, chat_history: List[Tuple[str, str]]) -> NLQSResult:
-        """This function is where the whole interaction happens.
-        It takes the user input and chat history as input and returns the response if the user's intent is either phatic_communication, profanity or sql_injection.
-        Else it returns the query result or search similarity result.
-
-        Args:
-            user_input (str): The user's input.
-            chat_history (list[(str, str)]): The chat history.
-
-        Returns:
-            result (NLQSResult): The result
-        """
-
-        # Overview
-        # Step 1 - retrieve descriptions and types from db. check if its empty. if not return the data.
-        # Step 2 - else if the retrived data was empty then generate new columns descriptions.
-        # Step 3 - next get the chroma collection
-        # Step 4 - pass all the retrieved data to the main_workflow method
-        # Step 5 - check if the user input is empty if true retun none
-        # Step 6 - Else remove the paranthesis from the user input.
-        # Step 7 - generate a summary for the user input the required format.
-        # Step 8 - check if the summary is empty. if true retry the generation of the summary, you can do this until five times
-        # (the above step is because we were getting errors while converting the generted summary to the json format.)
-        # Step 9 - generate an sql query.
-        # Step 10 - validate the generated query.
-        # Step 11 - check if the query result is empty. if true then do a similarity search and retrieve the relevent info and return it.
-        # Step 12 - else return the query result.
-
-        
         logger.info(f"Executing NLQS query workflow for input: {user_input}")
         
         # Step 0 - Create the pre-requisite objects
@@ -116,6 +113,15 @@ class NLQS:
         # Retrieve descriptions and types from db
         logger.debug("Retrieving column descriptions from vector database...")
         column_descriptions_dict = self.vectordb_driver.retrieve_descriptions_and_types_from_db()
+        
+        
+        print("*"*200)
+        
+        print(f"column_descriptions_dict: {column_descriptions_dict}")
+        
+        import json
+        print(json.dumps(column_descriptions_dict, indent=2))
+        
         if column_descriptions_dict is None:
             logger.error("No data found in the database")
             raise ValueError("No data found in the database. Generate Column descriptions.")
@@ -208,14 +214,37 @@ class NLQS:
             descriptive_data = summarized_input.descriptive_data
             identifier_data = summarized_input.identifier_data
 
-            identifier_query_fragments = construct_quantitaive_search_query_fragments(identifier_data)
-            quantitative_query_fragments = construct_quantitaive_search_query_fragments(numerical_data)
+            # Pass the LLM instance to the quantitative query construction functions
+            logger.debug("Constructing query fragments...")
+            # FIXED: Use proper identifier function instead of quantitative
+            identifier_query_fragments = construct_identifier_search_query_fragments(identifier_data)
+            quantitative_query_fragments = construct_quantitaive_search_query_fragments(numerical_data, self.llm)
             categorical_query_fragments = construct_categorical_search_query_fragments(categorical_data)
             descriptive_query_fragments = construct_descriptive_search_query_fragments(
                 descriptive_data, self.vectordb_driver
             )
 
+            logger.debug(f"Query fragments constructed - "
+                        f"Identifier: {len(identifier_query_fragments)}, "
+                        f"Quantitative: {len(quantitative_query_fragments)}, "
+                        f"Categorical: {len(categorical_query_fragments)}, "
+                        f"Descriptive: {len(descriptive_query_fragments)}")
+
             # Construct a search field that will capture all the data from the user input
+            # if hasattr(self.connection_driver, 'db_config'):
+            #     # Both SQLite and PostgreSQL use db_config, but check if database_name exists
+            #     if hasattr(self.connection_driver.db_config, 'database_name'):
+            #         # PostgreSQL case - has database_name attribute
+            #         database_name = self.connection_driver.db_config.database_name
+            #     else:
+            #         # SQLite case - doesn't have database_name, use default
+            #         database_name = self.connection_driver.db_config.database_name
+            # else:
+                # Fallback
+            database_name = self.connection_driver.db_config.db_file
+
+
+            # Then use database_name in the SearchField.construct_search_field call:
             search_field_object = SearchField.construct_search_field(
                 descriptive_query_fragments=[
                     fragment for fragments in descriptive_query_fragments.values() for fragment in fragments
@@ -224,8 +253,8 @@ class NLQS:
                 identifier_query_fragments=identifier_query_fragments,
                 quantitative_query_fragments=quantitative_query_fragments,
                 database_driver=self.connection_driver,
-                database_name=DEFAULT_DB_NAME,
-                table_name=DEFAULT_TABLE_NAME,
+                database_name=database_name,  # Use the determined database name
+                table_name=self.table_name,  # Use actual table name from config
             )
 
             # Get all search results from the search field
@@ -309,67 +338,3 @@ class NLQS:
             result = NLQSResult(records=[], uris=[])
 
         return result
-
-    def _get_connection_driver(self, connection_config: Union[SQLiteConnectionConfig, PostgresConnectionConfig]) -> SQLiteDriver | PostgresDriver:
-        """Check if the connection configuration is valid."""
-                # Initialize database connection
-        if isinstance(connection_config, SQLiteConnectionConfig):
-            logger.info("Using SQLite database")
-            return SQLiteDriver(connection_config)
-        elif isinstance(connection_config, PostgresConnectionConfig):
-            logger.info("Using PostgreSQL database")
-            return PostgresDriver(connection_config)
-        else:
-            logger.error("Invalid connection configuration")
-            raise ValueError("Invalid connection configuration")
-    
-    def _iniitalize_llm(self):
-        """Initialize the LLM object."""
-        logger.debug("Initializing LLM...")
-        # Create the LLM object
-        llm = get_default_llm(use_azure=True)  # Use Azure OpenAI by default
-        if llm is None:
-            logger.error("Failed to initialize LLM")
-            raise ValueError("Failed to initialize LLM")
-        logger.info("LLM initialized")
-
-        return llm
-    
-    def _initialize_embedding_model(self) -> AzureOpenAIEmbeddings:
-        """Initialize the embedding model."""
-        # Create the embedding model
-
-        logger.info("LLM initialized")
-        embedding_model = get_default_embedding_function(use_azure=True)
-        if embedding_model is None:
-            logger.error("Failed to initialize embedding model")
-            raise ValueError("Failed to initialize embedding model")
-        logger.info("LLM initialized")
-
-        return embedding_model
-    
-    def _initialize_vectordb_driver(
-        self,
-        chroma_config: ChromaDBConfig
-    ) -> VectorDBDriver:
-        """Initialize the vector database driver."""
-        logger.debug("Initializing vector database driver...")
-        vectordb_driver = VectorDBDriver(
-            chroma_config=chroma_config,
-            embedding_function=self._initialize_embedding_model(),
-        )
-        if vectordb_driver is None:
-            logger.error("Failed to initialize vector database driver")
-            raise ValueError("Failed to initialize vector database driver")
-        logger.info("Vector database driver initialized successfully")
-
-        return vectordb_driver
-    
-    def _test_infrastructure(self):
-        """Test if all required infrastructure components are available."""
-        logger.debug("Checking ChromaDB collections...")
-        if self.vectordb_driver.check_nlqs_collections_exists() is False:
-            logger.error("ChromaDB collections do not exist")
-            raise ValueError("ChromaDB collections do not exist. Please create them.")
-        logger.info("ChromaDB collections verified")
-    
