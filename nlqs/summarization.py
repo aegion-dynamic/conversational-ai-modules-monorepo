@@ -1,4 +1,5 @@
 import json
+import re
 import logging
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, TypedDict, Union
@@ -50,15 +51,15 @@ REFERENCE_SUMMARIZED_INTENT_DICT = {
 
 
 REFERENCE_SUMMARIZED_OUTPUT_DICT = {
-    "quantitative_data": {},
     "qualitative_data": {},
+    "quantitative_data": {},
     "user_requested_columns": [],
 }
 
 
 # Default system prompt for the LLM.
 DEFAULT_SYSTEM_PROMPT = (
-    "You are a professional medical assistant, adept at handling inquiries related to medical products."
+    "You are a professional data assistant, adept at handling inquiries across various domains and data types."
 )
 
 
@@ -76,6 +77,26 @@ def get_prompt(instruction: str, system_prompt: str = DEFAULT_SYSTEM_PROMPT) -> 
     """
     SYSTEM_PROMPT = f"<<SYS>>\n{system_prompt}\n<</SYS>>\n\n"
     return f"[INST]{SYSTEM_PROMPT}{instruction}[/INST]"
+
+
+def extract_json_from_response(response_text: str) -> str:
+    """Extract JSON content from markdown code blocks or return the original text.
+    
+    Args:
+        response_text (str): The response text that may contain JSON in markdown code blocks
+        
+    Returns:
+        str: The extracted JSON string
+    """
+    # Try to extract JSON from markdown code blocks
+    json_pattern = r'```(?:json)?\s*(\{.*?\})\s*```'
+    match = re.search(json_pattern, response_text, re.DOTALL)
+    
+    if match:
+        return match.group(1).strip()
+    
+    # If no markdown code blocks found, return the original text
+    return response_text.strip()
 
 
 # Function to identify qualitative and quantitative data and user intent
@@ -138,12 +159,10 @@ def summarize(
                 - Example response: "It seems you're asking about something specific. Could you provide more details?"
 
                 2. **Structured Analysis**: For all other inputs, analyze the user input and identify key details based on our available data and chat history.
-                
-                3. Summarize the input, classifying the statements made by the user into qualitative and quantitative categories.
+                  3. Summarize the input, classifying the statements made by the user into qualitative and quantitative categories.
                 
                 4. Identify relevant columns from which we can provide an answer. Pay close attention to the user's intent and specific mentions of data columns:
-                - Are they seeking information about products, medications, treatments, or other relevant categories?
-                - If the user is seeking information about a product, also provide the URL of the product if available.
+                - Are they seeking information about specific entities, categories, or data types?
                 - Look for explicit mentions of column names, synonyms, or phrases that indicate the type of information requested. If the user specifies certain attributes or metrics, consider these as user-requested columns.
 
                 5. Classify the user's intent. Possible intents include: phatic_communication, sql_injection, profanity, and other.
@@ -151,8 +170,7 @@ def summarize(
                 6. Output the result in a JSON format.
 
                 7. Do not output any other information except the JSON. Do not add [OUT], [/OUT] to the output.(!important)
-                
-                The output JSON should have the following structure:
+                  The output JSON should have the following structure:
                 `
                     "summary": "summary of the user input",
                     "qualitative_statements":
@@ -161,7 +179,7 @@ def summarize(
                                             "statement 2",
                                             "statement 3"
                                         ],
-                    "qualitative_statements":
+                    "quantitative_statements":
                                         [
                                             "statement 1",
                                             "statement 2",
@@ -182,11 +200,18 @@ def summarize(
     output_parser = StrOutputParser()
     chain = intent_classification_prompt | llm | output_parser
 
-    summarized_input_intent = str(chain.invoke({"user_input": user_input}))
+    summarized_input_intent_raw = str(chain.invoke({"user_input": user_input}))
 
+    print(f"summarized_input_intent: {summarized_input_intent_raw}")
+    print("------------------------------------------------------------------------")
+    
+    # Extract JSON from markdown code blocks if present
+    summarized_input_intent_json = extract_json_from_response(summarized_input_intent_raw)
+    
+    # Attempt to parse the summarized input as JSON
     try:
         # Attempt to parse the summarized input as JSON
-        summarized_input_dict = json.loads(summarized_input_intent)
+        summarized_input_dict = json.loads(summarized_input_intent_json)
 
         missing_keys = validate_llm_output_keys(
             llm_output=summarized_input_dict, reference_dict=REFERENCE_SUMMARIZED_INTENT_DICT
@@ -204,9 +229,11 @@ def summarize(
                 quantitative_statements=summarized_input_dict["quantitative_statements"],
             )
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
         # If parsing fails, return an empty SummarizedInput
-        logger.error(f"Error parsing summarized_input_intent for user input: {user_input}")
+        logger.error(f"Error parsing summarized_input_intent for user input: {user_input}. Error: {str(e)}")
+        logger.error(f"Raw response: {summarized_input_intent_raw}")
+        logger.error(f"Extracted JSON: {summarized_input_intent_json}")
         summarized_input_intent = InputIntent(
             summary="", user_intent="", qualitative_statements=[], quantitative_statements=[]
         )
@@ -226,10 +253,8 @@ def summarize(
                 2. **Structured Analysis**: For all other inputs, analyze the user input and identify key details based on our available data and chat history.
                 
                 3. Summarize the input, classifying the data into qualitative and quantitative categories.
-                
-                4. Identify relevant columns from which we can provide an answer. Pay close attention to the user's intent and specific mentions of data columns:
-                - Are they seeking information about products, medications, treatments, or other relevant categories?
-                - If the user is seeking information about a product, also provide the URL of the product if available.
+                  4. Identify relevant columns from which we can provide an answer. Pay close attention to the user's intent and specific mentions of data columns:
+                - Are they seeking information about specific entities, categories, or data types?
                 - Look for explicit mentions of column names, synonyms, or phrases that indicate the type of information requested. If the user specifies certain attributes or metrics, consider these as user-requested columns.
 
                 5. Classify the user's intent. Possible intents include: phatic_communication, sql_injection, profanity, and other.
@@ -240,22 +265,23 @@ def summarize(
                 
                 The output JSON should have the following structure:
                 `
-                    "quantitiave_data":
-                                        ` 
-                                        "column name": "Data mentioned about that column by the user. Example- < 4",
-                                        "column name": "Data mentioned about that column by the user. Example- > 6.215",
-                                        "column name": "Data mentioned about that column by the user. Example- >= 3.14 or <= 2.718",
-                                        `,
                     "qualitative_data": 
                                         ` 
                                         "column name": "Data mentioned about that column by the user",
                                         "column name": "Data mentioned about that column by the user",
                                         "column name": "Data mentioned about that column by the user",
                                         `,
-                    "user_requested_columns": "List of columns the user wants data from. If none, leave it as an empty list. Always add product and url to this column.",
+                    "quantitative_data":
+                                        ` 
+                                        "column name": "Data mentioned about that column by the user. Example- < 4",
+                                        "column name": "Data mentioned about that column by the user. Example- > 6.215",
+                                        "column name": "Data mentioned about that column by the user. Example- >= 3.14 or <= 2.718",
+                                        `,
+                    
+                    "user_requested_columns": "List of columns the user wants data from. If none, leave it as an empty list.",
                 `
                 
-                The data we have and chat history:
+                The data we have and chat history: 
                 Data:{column_descriptions}\n\n 
                 Qualitative statements: {summarized_input_intent['qualitative_statements']}\n\n
                 Quantitative statements: {summarized_input_intent['quantitative_statements']}\n\n
@@ -275,15 +301,18 @@ def summarize(
     output_parser = StrOutputParser()
     chain = prompt | llm | output_parser
 
-    summarized_input_str = str(chain.invoke({"user_input": user_input}))
+    summarized_input_str_raw = str(chain.invoke({"user_input": user_input}))
 
-    print(f"summarized_input_intent: {summarized_input_str}")
+    print(f"summarized_input_str: {summarized_input_str_raw}")
 
     print("------------------------------------------------------------------------")
 
+    # Extract JSON from markdown code blocks if present
+    summarized_input_str_json = extract_json_from_response(summarized_input_str_raw)
+
     try:
         # Attempt to parse the summarized input as JSON
-        summarized_input_dict = json.loads(summarized_input_str)
+        summarized_input_dict = json.loads(summarized_input_str_json)
 
         missing_keys = validate_llm_output_keys(
             llm_output=summarized_input_dict, reference_dict=REFERENCE_SUMMARIZED_OUTPUT_DICT
@@ -293,8 +322,11 @@ def summarize(
             logger.error(f"Missing keys in summarized_input_dict: {missing_keys}")
             raise ValueError("Missing keys in summarized_input_dict")
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
         # If parsing fails, return an empty SummarizedInput
+        logger.error(f"Error parsing summarized_input_dict for user input: {user_input}. Error: {str(e)}")
+        logger.error(f"Raw response: {summarized_input_str_raw}")
+        logger.error(f"Extracted JSON: {summarized_input_str_json}")
         summarized_input_dict = {}
 
     logger.info("--------------------------")
@@ -423,14 +455,14 @@ def summarize(
                 if column_type == ColumnType.CATEGORICAL:
                     categorical_data[column_name] = description
                 elif column_type == ColumnType.DESCRIPTIVE:
-                    descriptive_data[column_name] = description
+                    descriptive_data[column_name] = description                
                 elif column_type == ColumnType.IDENTIFIER:
                     identifier_data[column_name] = description
                 else:
                     raise ValueError(f"Invalid column type '{column_type}' for column '{column_name}'")
 
     summazied_user_requested_columns: List[str] = summarized_input_dict.get("user_requested_columns", [])
-    get_validated_user_requested_columns(vectordb, summazied_user_requested_columns, "default_table", "default_db")
+    get_validated_user_requested_columns(vectordb, summazied_user_requested_columns, DEFAULT_TABLE_NAME, DEFAULT_DB_NAME)
 
     summarized_input = SummarizedInput(
         summary=summarized_input_intent["summary"],

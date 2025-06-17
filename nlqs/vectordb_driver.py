@@ -41,7 +41,6 @@ from __future__ import annotations
 
 import ast
 import collections
-from curses import meta
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path

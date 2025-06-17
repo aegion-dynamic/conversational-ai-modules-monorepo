@@ -1,3 +1,4 @@
+import os
 import random
 import sqlite3
 from pathlib import Path
@@ -9,12 +10,14 @@ import pandas as pd
 import psycopg2
 import pytest
 from langchain_openai import OpenAIEmbeddings
+from langchain_openai import AzureOpenAIEmbeddings
 from pydantic import SecretStr
 
 from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
-from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME, OPENAI_API_KEY
+from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME
 from nlqs.vectordb_driver import ChromaDBConfig, VectorDBDriver
+from utils.llm import get_default_embedding_function
 
 
 @pytest.fixture(scope="function")
@@ -195,11 +198,10 @@ def vectordb_driver(chroma_config, embedding_function):
 @pytest.fixture(scope="function")
 def embedding_function() -> (
     Callable[[str], List[float]]
-):  # -> Callable[..., List[float]]:# -> Callable[..., List[float]]:
+):
 
-    # Initialize the Embedding model
-    # TODO: Rearchitect this so that we can switch models
-    embedding_model = OpenAIEmbeddings(api_key=SecretStr(OPENAI_API_KEY), model="text-embedding-ada-002")
+    # Initialize the Azure OpenAI Embedding model
+    embedding_model = get_default_embedding_function(use_azure=True)
 
     # Create an embedding function
     embedding_function = embedding_model.embed_query
