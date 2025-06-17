@@ -49,14 +49,14 @@ You are a data query assistant. Your task is to convert descriptive numerical co
 Given a column name and a descriptive condition, you need to:
 1. Determine if this is asking for a numerical comparison
 2. If yes, convert it to a proper SQL condition format (>, <, >=, <=, =)
-3. Make reasonable assumptions about thresholds based on common sense
+3. Make reasonable assumptions about thresholds based on common sense and typical values for the column
 
 Examples:
-- "high CBD content" for CBD column → > 10
-- "low price" for Price column → < 50
-- "products with THC above average" → > 15
-- "expensive items" → > 100
-- "small quantities" → < 10
+- "high [column]" → > [typical high threshold]
+- "low [column]" → < [typical low threshold]
+- "above average [column]" → > [average value]
+- "expensive" for a price column → > [typical expensive threshold]
+- "small quantities" → < [typical small value]
 
 Important rules:
 1. Only return the operator and number (e.g., > 10, <= 50, = 0)

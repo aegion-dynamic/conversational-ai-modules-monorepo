@@ -44,12 +44,17 @@ sqlite_config = SQLiteConnectionConfig(
     uri_column="URL",
     output_columns=["Product", "Category", "CBD", "THC", "Description", "MedicalBenefitsReported"]
 )
+DEFAULT_COLUMN_INFO_COLLECTION_NAME = "nlqs_column_info"
+DEFAULT_DATASET_COLLECTION_NAME = "nlqs_descriptive_data"
+DEFAULT_TABLE_DESCRIPTION_COLLECTION_NAME = "nlqs_table_descriptions"
 
 # Setup ChromaDB configuration
 logger.info("Setting up ChromaDB configuration...")
 chroma_config = ChromaDBConfig(
     persist_path=Path("chroma"),
-    dataset_collection_name="nlqs_descriptive_data"
+    table_description_collection_name = DEFAULT_TABLE_DESCRIPTION_COLLECTION_NAME,
+    column_info_collection_name = DEFAULT_COLUMN_INFO_COLLECTION_NAME,
+    dataset_collection_name = DEFAULT_DATASET_COLLECTION_NAME,
 )
 
 # Environment variables should already be loaded from .env file
@@ -125,7 +130,7 @@ def main():
         return
 
     # Test with a single query first
-    test_query = "Show me products with high CBD content"
+    test_query =  "Show me products with high CBD content"
     
     logger.info("Starting test with a single query")
     print("Starting NLQS Demo...")
