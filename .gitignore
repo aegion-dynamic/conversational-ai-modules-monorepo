@@ -92,3 +92,6 @@ knowledge_graphs/
 # ignore logs
 
 logs/
+
+# nl2graphql specific
+*.graphql
