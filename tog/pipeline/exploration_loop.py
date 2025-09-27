@@ -1,7 +1,7 @@
 from typing import List
 import logging
 
-from tog.llms import BaseLLM
+from llms import BaseLLM
 from tog.kgs import KnowledgeGraph
 from tog.models.entity import Entity
 from tog.models.triple import Triple

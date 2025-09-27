@@ -2,7 +2,7 @@ import logging
 from typing import Dict, List
 from abc import ABC, abstractmethod
 
-from tog.llms import BaseLLM
+from llms import BaseLLM
 from tog.kgs import KnowledgeGraph
 from tog.models.entity import Entity
 from tog.models.relation import Relation

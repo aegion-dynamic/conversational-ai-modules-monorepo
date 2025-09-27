@@ -47,6 +47,8 @@ pypdf2 = "^3.0.1"
 spacy = "^3.8.4"
 python-levenshtein = "^0.27.1"
 groq = "^0.28.0"
+python-dotenv = "^1.1.1"
+fuzzywuzzy = "^0.18.0"
 
 [tool.poetry.group.dev.dependencies]
 flask_testing = "0.8.0"
