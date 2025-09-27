@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 import logging
 
 from llms import BaseLLM
@@ -25,7 +25,7 @@ class ExplorationLoop:
                  query: str,
                  max_iterations: int = 3,
                  max_paths: int = 5,
-                 system_prompt: str = None):
+                 system_prompt: Optional[str] = None):
         """
         Initialize the exploration loop.
         

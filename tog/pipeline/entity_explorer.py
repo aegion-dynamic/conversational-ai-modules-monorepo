@@ -1,7 +1,7 @@
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 from abc import ABC, abstractmethod
 
-from tog.llms import BaseLLM
+from llms import BaseLLM
 from tog.kgs import KnowledgeGraph
 from tog.models.entity import Entity
 from tog.models.relation import Relation
@@ -19,7 +19,7 @@ class EntityExplorer(ABC):
                  kg: KnowledgeGraph, 
                  query: str, 
                  max_entities_per_round: int = 3,
-                 system_prompt: str = None):
+                 system_prompt: Optional[str] = None):
         """
         Initialize the EntityExplorer with a language model, knowledge graph, and query.
         
