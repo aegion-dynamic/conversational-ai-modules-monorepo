@@ -1,16 +1,18 @@
 import os
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional, LiteralString
 from dotenv import load_dotenv
 from . import KnowledgeGraph
 from tog.utils.logger import setup_logger
+
 
 class Neo4jKnowledgeGraph(KnowledgeGraph):
     """
     Knowledge graph implementation using Neo4j.
     """
-    
-    def __init__(self, uri: str = None, user: str = None, password: str = None, **kwargs):
+
+    def __init__(self, uri: Optional[str] = None, user: Optional[str] = None, password: Optional[str] = None, **kwargs):
         import neo4j
+
         load_dotenv()  # Load environment variables from .env file
         uri = uri or os.getenv("NEO4J_URI")
         user = user or os.getenv("NEO4J_USERNAME")
@@ -21,8 +23,8 @@ class Neo4jKnowledgeGraph(KnowledgeGraph):
         self.session = None
         self.logger = setup_logger(name="neo4j_knowledge_graph", log_filename="neo4j_knowledge_graph.log")
         self.logger.info(f"Neo4jKnowledgeGraph initialized with uri: {uri}, user: {user}")
-    
-    def query(self, query_str: str, **kwargs) -> List[Dict[str, Any]]:
+
+    def query(self, query_str: LiteralString, **kwargs) -> List[Dict[str, Any]]:
         try:
             with self.driver.session() as session:
                 result = session.run(query_str, **kwargs)
@@ -30,19 +32,21 @@ class Neo4jKnowledgeGraph(KnowledgeGraph):
         except Exception as e:
             self.logger.error(f"Error executing query: {query_str}, Error: {e}")
             return []
-    
+
     def size(self) -> int:
         try:
             with self.driver.session() as session:
                 result = session.run("MATCH (n) RETURN count(n) AS count")
-                return result.single()["count"]
+                record = result.single()
+                return record["count"] if record and "count" in record else 0
         except Exception as e:
             self.logger.error(f"Error getting size of knowledge graph: {e}")
             return 0
-        
+
     def close(self):
         if self.driver is not None:
             self.driver.close()
+
 
 # if __name__ == "__main__":
 #     # Example usage
