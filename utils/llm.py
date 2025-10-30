@@ -30,7 +30,7 @@ def get_default_llm(use_azure: bool = True):
         )
 
 
-def get_default_embedding_function(use_azure: bool = True) -> Optional[AzureOpenAIEmbeddings]:
+def get_default_embedding_function(use_azure: bool = True) -> AzureOpenAIEmbeddings:
     """Returns the default embedding function, either from Azure OpenAI or OpenAI."""
     if use_azure:
         return AzureOpenAIEmbeddings(
