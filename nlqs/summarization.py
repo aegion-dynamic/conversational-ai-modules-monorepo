@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple, TypedDict, Union
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI, OpenAI
+from langchain_openai import AzureChatOpenAI, ChatOpenAI, OpenAI
 from sqlalchemy import column
 
 from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME
@@ -107,7 +107,7 @@ def summarize(
     numerical_columns: List[str],
     categorical_columns: List[str],
     descriptive_columns: List[str],
-    llm: Union[ChatOpenAI, OpenAI],
+    llm: Union[ChatOpenAI, OpenAI, AzureChatOpenAI],
     vectordb: VectorDBDriver,
 ) -> SummarizedInput:
     """Summarizes the user input and returns the summary, quantitative data, and qualitative data, along with the user requested columns in a JSON format.
@@ -524,34 +524,3 @@ def get_validated_user_requested_columns(
         ret.append(closest_column_name)
 
     return ret
-
-
-# def qualitaive_search(collection: chromadb.Collection, data: Dict[str, str], primary_key: str) -> List[str]:
-#     """Performs a similarity search on the database and returns all similar results.
-
-#     Args:
-#         collection (chromadb.Collection): The ChromaDB collection to search.
-#         data (Dict[str, str]): A dictionary of qualitative data to search for.
-#         primary_key (str): The primary key column name in the database.
-
-#     Returns:
-#         List[str]: A dictionary containing the search results.
-#     """
-#     all_ids = []
-
-#     for column, condition in data.items():
-#         query_result = collection.query(query_texts=condition, n_results=10, where={"column_name": column})
-
-#         if query_result:
-#             ids_for_column = set()  # Use a set to store unique IDs for this column
-#             for result in query_result["metadatas"]:
-#                 for item in result:
-#                     id_value = item.get(primary_key)
-#                     if id_value is not None:
-#                         ids_for_column.add(str(id_value))  # Convert to string for comparison
-#             all_ids.append(ids_for_column)
-
-#     # Find the intersection of IDs across all columns
-#     common_ids = set.intersection(*all_ids) if all_ids else set()
-
-#     return list(common_ids)
