@@ -5,7 +5,7 @@ import logging
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI, OpenAI
+from langchain_openai import AzureChatOpenAI, ChatOpenAI, OpenAI
 
 from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME
 from nlqs.vectordb_driver import VectorDBDriver
@@ -29,7 +29,7 @@ def join_fragments(fragments: List[str], joiner: str = "AND") -> str:
 def parse_descriptive_numerical_condition(
     column_name: str, 
     descriptive_condition: str, 
-    llm: Union[ChatOpenAI, OpenAI]
+    llm: Union[ChatOpenAI, OpenAI, AzureChatOpenAI]
 ) -> str:
     """Convert descriptive numerical conditions to SQL conditions using LLM.
     
@@ -105,7 +105,7 @@ Return only the numerical condition (without quotes) or "UNABLE_TO_PARSE":
 
 def construct_quantitaive_search_query_fragments(
     quantitaive_data: Dict[str, str], 
-    llm: Union[ChatOpenAI, OpenAI] = None
+    llm: Union[ChatOpenAI, OpenAI, AzureChatOpenAI, None] = None
 ) -> List[str]:
     """Creates an SQL query from a dictionary of quantitative data.
 
@@ -171,11 +171,13 @@ def construct_quantitaive_search_query_fragments(
 
         # Special handling for CBD column to convert mg/g values
         if column == "CBD":
-            # Use CAST and REPLACE to handle the mg/g unit conversion in SQLite
-            query_part = f"CAST(REPLACE(REPLACE({column}, ' mg/g', ''), ',', '.') AS DECIMAL) {operator} {value}"
+            # Handle mg/g unit conversion; quote identifier for case-sensitive columns
+            query_part = (
+                f"CAST(REPLACE(REPLACE(\"{column}\", ' mg/g', ''), ',', '.') AS DECIMAL) {operator} {value}"
+            )
         else:
-            # Normal numeric comparison for other columns
-            query_part = f"{column} {operator} {value}"
+            # Quote column and cast to numeric for safe comparison in Postgres
+            query_part = f"CAST(\"{column}\" AS DECIMAL) {operator} {value}"
 
         query_parts.append(query_part)
 
@@ -196,8 +198,8 @@ def construct_categorical_search_query_fragments(categorical_data: Dict[str, str
 
     query_parts = []
     for column, condition in categorical_data.items():
-        # Construct the query part
-        query_part = f"{column} = '{condition}'"
+        # Quote column to preserve case sensitivity
+        query_part = f"\"{column}\" = '{condition}'"
         query_parts.append(query_part)
 
     return query_parts
@@ -222,11 +224,11 @@ def construct_identifier_search_query_fragments(identifier_data: Dict[str, str])
             # Try to convert to int/float - if successful, it's numeric
             float(condition)
             # If numeric, don't use quotes
-            query_part = f"{column} = {condition}"
+            query_part = f"\"{column}\" = {condition}"
         except ValueError:
             # If not numeric, treat as string and add quotes
             # Also handle case-insensitive matching for location names
-            query_part = f"LOWER({column}) = LOWER('{condition}')"
+            query_part = f"LOWER(\"{column}\") = LOWER('{condition}')"
         
         query_parts.append(query_part)
         logger.info(f"Generated identifier query fragment: {query_part}")
