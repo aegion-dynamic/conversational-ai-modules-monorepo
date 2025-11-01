@@ -14,6 +14,10 @@ from nlqs.database.postgres import PostgresDriver
 from nlqs.database.sqlite import SQLiteDriver
 from nlqs.parameters import OPENAI_API_KEY
 from utils.llm import get_default_llm
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 # 1. pass the data in the databse
@@ -21,22 +25,11 @@ from utils.llm import get_default_llm
 # 3. pass the column name, it's data type and the sample data into the llm to generate desccriptions
 # 4. in the instruction for llm, i passed some predifined descriptions to make the llm know how to write descriptions.
 # these predifined descriptions will not effect any future changes..
-def get_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, Dict[str, str]]:
-    print("Generating column descriptions...")
 
-    # Initialize an empty dictionary to store column descriptions and types
-    descriptions = {}
 
-    for column in dataframe.columns:
-        # For each column, get data and create sample data from five non-empty rows, removing special characters.
-        col_data = dataframe[column]
-        col_type = col_data.dtype
-        sample_data = dataframe[column].dropna().sample(min(5, len(dataframe[column]))).tolist()
-        sample_data_str = ", ".join(map(str, sample_data))
-        sample_data_str = re.sub("{|}", "", sample_data_str)
 
-        # Prepare the prompt for LLM
-        prompt = ChatPromptTemplate.from_messages(
+def _get_prompt_for_description_generation():
+    return ChatPromptTemplate.from_messages(
             [
                 (
                     "system",
@@ -78,9 +71,51 @@ def get_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, Dict[str, str]
             ]
         )
 
-        llm = get_default_llm()
+def _validate_parsed_str(parsed_str: str) -> str:
+    """
+    Validates and cleans a JSON string to ensure it can be parsed correctly.
+    This function attempts to fix common issues such as trailing commas and unescaped characters.
 
-        output_parser = StrOutputParser()
+    Args:
+        json_str (str): The JSON string to validate.
+    Returns:
+        str: A cleaned JSON string that can be parsed.
+    """
+    logger.debug(f"Validating parsed string: {parsed_str}")
+    validated_str = None
+
+    if parsed_str.startswith("```json"):
+        logger.info("Parsed string starts with ```json, attempting to extract JSON block.")
+        match = re.search(
+            r"```json\n(.*?)\n```", parsed_str, re.DOTALL
+        )  # The re.DOTALL flag allows the dot (.) to match newline characters as well.
+
+        logger.debug(f"Match found: {match}")
+
+        if match:
+            validated_str = match.group(1)  # Extract the JSON content without the ```json and ``` markers
+
+    return validated_str or parsed_str
+
+
+def generate_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, Dict[str, str]]:
+    logger.info("Generating column descriptions...")
+
+    # Initialize an empty dictionary to store column descriptions and types
+    descriptions = {}
+
+    for column in dataframe.columns:
+        # For each column, get data and create sample data from five non-empty rows, removing special characters.
+        col_data = dataframe[column]
+        col_type = col_data.dtype
+        sample_data = dataframe[column].dropna().sample(min(5, len(dataframe[column]))).tolist()
+        sample_data_str = ", ".join(map(str, sample_data))
+        sample_data_str = re.sub("{|}", "", sample_data_str)
+
+        # Build the chain for description generation
+        prompt = _get_prompt_for_description_generation()
+        llm = get_default_llm()
+        output_parser = StrOutputParser() # TODO: See if JSONOutputParser can be used here
         chain = prompt | llm | output_parser
 
         # Generate the description
@@ -93,18 +128,11 @@ def get_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, Dict[str, str]
             }
         )
 
-        # print(f"response: {response}")
+        logger.info(f"Response: {response}")
+        
+        response = _validate_parsed_str(response)
 
-        # TODO write if condition...
-
-        if response.startswith("```json"):
-            match = re.search(r"```json\n(.*?)\n```", response, re.DOTALL)
-
-            # print(f"response: {match}")
-
-            if match:
-                response = match.group(1)
-
+        # Parse the JSON response
         json_response = json.loads(response)
 
         column_name = json_response["column_name"]
@@ -117,8 +145,9 @@ def get_column_descriptions(dataframe: pd.DataFrame) -> Dict[str, Dict[str, str]
             "column_type": column_type,
         }
 
+    logger.info("Column descriptions generated successfully.")
     # Return the dictionary of column descriptions and types
-    return descriptions
+    return descriptions # TODO: Create a dataclass for better structure and type safety
 
 
 def store_descriptions_in_db(
@@ -148,12 +177,12 @@ def store_descriptions_in_db(
             """
         )
 
-    print("Column metadata (name, description, type) stored in the database.")
+    logger.info("Column metadata (column_name, description, column_type) stored in the database.")
 
 
-def generate_column_description(df: pd.DataFrame, db_driver: Union[SQLiteDriver, PostgresDriver]):
+def generate_and_store_column_description(df: pd.DataFrame, db_driver: Union[SQLiteDriver, PostgresDriver]):
     # Get column descriptions along with types
-    column_descriptions = get_column_descriptions(dataframe=df)
+    column_descriptions = generate_column_descriptions(dataframe=df)
 
     # Store descriptions and column types in the database
     store_descriptions_in_db(
@@ -161,5 +190,5 @@ def generate_column_description(df: pd.DataFrame, db_driver: Union[SQLiteDriver,
         db_driver=db_driver,
     )
 
-    print(column_descriptions)
-    print("Column descriptions and column types stored in the database.")
+    logger.debug(column_descriptions)
+    logger.info("Column descriptions and column types stored in the database.")
