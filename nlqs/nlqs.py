@@ -113,14 +113,11 @@ class NLQS:
         # Retrieve descriptions and types from db
         logger.debug("Retrieving column descriptions from vector database...")
         column_descriptions_dict = self.vectordb_driver.retrieve_descriptions_and_types_from_db()
-        
-        
-        print("*"*200)
-        
-        print(f"column_descriptions_dict: {column_descriptions_dict}")
+        logger.info("Column descriptions retrieved from vector database")
+        # logger.debug(f"column_descriptions_dict: {column_descriptions_dict}")
         
         import json
-        print(json.dumps(column_descriptions_dict, indent=2))
+        logger.debug(json.dumps(column_descriptions_dict, indent=2))
         
         if column_descriptions_dict is None:
             logger.error("No data found in the database")
@@ -167,7 +164,7 @@ class NLQS:
             raise
 
         count = 0
-        print(f"summarized_input: {summarized_input}")
+        logger.debug(f"summarized_input: {summarized_input}")
         while not summarized_input.summary and count < 5:
             summarized_input = summarize(
                 user_input=user_input,
@@ -202,12 +199,13 @@ class NLQS:
             
         # This is the standard workflow for the NLQS
 
-        # TODO: We should reenable this        # # Check if the user requested columns exist
+        # TODO: We should reenable this        
+        # # Check if the user requested columns exist
         # for column in summarized_input.user_requested_columns:
         #     if column not in column_descriptions:
         #         raise ValueError(f"Column {column} not found in the database.")
 
-        print("checking for user requested columns...")
+        logger.debug("checking for user requested columns...")
         if len(summarized_input.user_requested_columns) > 0:
             numerical_data = summarized_input.numerical_data
             categorical_data = summarized_input.categorical_data
@@ -257,7 +255,7 @@ class NLQS:
 
             # Get all search results from the search field
             search_results = search_field_object.get_results()
-            print(f"Search results: {search_results}")
+            logger.debug(f"Search results: {search_results}")
 
             # Extract primary keys from search results
             all_primary_keys = []
@@ -330,7 +328,7 @@ class NLQS:
 
                 logger.info(f"Query executed: {final_query}")
                 logger.info(f"Found {len(records)} records")
-                print(f"result: {result}")
+                logger.debug(f"result: {result}")
         else:
             logger.info("No user requested columns found")
             result = NLQSResult(records=[], uris=[])
