@@ -21,12 +21,17 @@ from nlqs.vectordb_driver import (
 @dataclass
 class NeonDBConfig:
     # Connection string: postgresql://user:password@host:port/database
-    conn_string: str = os.getenv("NEONDB_CONNECTION_STRING", "")
+    conn_string: str = ""
     schema: str = "public"
     column_info_table: str = "nlqs_column_info"          # mirrors nlqs_column_info collection
     dataset_table: str = "nlqs_descriptive_data"         # mirrors nlqs_descriptive_data collection
     table_desc_table: str = "nlqs_table_descriptions"    # mirrors nlqs_table_descriptions collection
     embedding_dim: int = 1536                            # match your embedding function dimension
+    
+    def __post_init__(self):
+        """Load connection string from environment if not provided."""
+        if not self.conn_string:
+            self.conn_string = os.getenv("NEONDB_CONNECTION_STRING", "")
 
 
 def _to_vector_literal(embedding: List[float]) -> str:
