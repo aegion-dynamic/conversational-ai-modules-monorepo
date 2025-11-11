@@ -64,13 +64,27 @@ def _to_vector_literal(embedding: List[float]) -> str:
 class NeonVectorDBDriver:
     def __init__(self, neon_config: NeonDBConfig, embedding_function: Callable[[str], List[float]]):
         if not neon_config.conn_string:
-            raise ValueError("NEONDB_CONNECTION_STRING is not set. Add it to your .env.")
+            raise ValueError(
+                "NEONDB_CONNECTION_STRING is not set. "
+                "Please set it in your environment or pass it to NeonDBConfig(conn_string='...')"
+            )
+        
+        # Validate connection string format
+        if not neon_config.conn_string.startswith(("postgres://", "postgresql://")):
+            raise ValueError(
+                f"Invalid connection string format. Expected 'postgresql://...' or 'postgres://...', "
+                f"got: {neon_config.conn_string[:20]}..."
+            )
 
         self.config = neon_config
         self.embedding_function = embedding_function
+        
         # Keep a single connection; psycopg v3 is thread-safe to create connections as needed
-        self._conn = psycopg.connect(self.config.conn_string)
-        self._conn.autocommit = True
+        try:
+            self._conn = psycopg.connect(self.config.conn_string)
+            self._conn.autocommit = True
+        except psycopg.Error as e:
+            raise ConnectionError(f"Failed to connect to NeonDB: {e}")
 
         # Ensure schema/tables exist (safe to call multiple times)
         self.initialize_nlqs_vectordb(self.config)
