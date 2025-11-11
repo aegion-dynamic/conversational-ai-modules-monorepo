@@ -401,6 +401,14 @@ class NeonVectorDBDriver:
             cur = cast(Any, cur)
             for i in range(0, len(records), batch_size):
                 batch = records[i : i + batch_size]
+                # Validate embedding dimensions
+                for idx, r in enumerate(batch):
+                    if len(r["embedding"]) != self.config.embedding_dim:
+                        raise ValueError(
+                            f"Embedding dimension mismatch at record {i + idx}: "
+                            f"expected {self.config.embedding_dim}, got {len(r['embedding'])}"
+                        )
+                
                 cur.executemany(
                     f"""
                     INSERT INTO {self.config.schema}.{self.config.column_info_table}
@@ -425,6 +433,14 @@ class NeonVectorDBDriver:
             cur = cast(Any, cur)
             for i in range(0, len(records), batch_size):
                 batch = records[i : i + batch_size]
+                # Validate embedding dimensions
+                for idx, r in enumerate(batch):
+                    if len(r["embedding"]) != self.config.embedding_dim:
+                        raise ValueError(
+                            f"Embedding dimension mismatch at record {i + idx}: "
+                            f"expected {self.config.embedding_dim}, got {len(r['embedding'])}"
+                        )
+                
                 cur.executemany(
                     f"""
                     INSERT INTO {self.config.schema}.{self.config.dataset_table}
@@ -449,6 +465,14 @@ class NeonVectorDBDriver:
             cur = cast(Any, cur)
             for i in range(0, len(records), batch_size):
                 batch = records[i : i + batch_size]
+                # Validate embedding dimensions
+                for idx, r in enumerate(batch):
+                    if len(r["embedding"]) != self.config.embedding_dim:
+                        raise ValueError(
+                            f"Embedding dimension mismatch at record {i + idx}: "
+                            f"expected {self.config.embedding_dim}, got {len(r['embedding'])}"
+                        )
+                
                 cur.executemany(
                     f"""
                     INSERT INTO {self.config.schema}.{self.config.table_desc_table}
