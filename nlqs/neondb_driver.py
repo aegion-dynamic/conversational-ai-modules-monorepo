@@ -62,13 +62,11 @@ class NeonVectorDBDriver:
                 """
                 SELECT COUNT(*) AS cnt
                 FROM information_schema.tables
-                WHERE table_schema = %s AND table_name IN (%s, %s, %s)
+                WHERE table_schema = %s AND table_name = ANY(%s)
                 """,
                 (
                     self.config.schema,
-                    self.config.column_info_table,
-                    self.config.dataset_table,
-                    self.config.table_desc_table,
+                    [self.config.column_info_table, self.config.dataset_table, self.config.table_desc_table],
                 ),
             )
             row = cur.fetchone()
