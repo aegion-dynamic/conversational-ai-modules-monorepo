@@ -132,6 +132,10 @@ class NeonVectorDBDriver:
                 cur = cast(Any, cur)
                 # Enable pgvector
                 cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+                
+                # Create schema if it doesn't exist (for non-public schemas)
+                if config.schema != "public":
+                    cur.execute(f"CREATE SCHEMA IF NOT EXISTS {config.schema};")
 
                 # Column info table
                 cur.execute(
