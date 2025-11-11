@@ -1,3 +1,21 @@
+"""
+NeonDB Vector Database Driver for NLQS
+
+This module provides a PostgreSQL/NeonDB backend for NLQS vector operations using pgvector.
+It mirrors the VectorDBDriver API but uses PostgreSQL tables instead of ChromaDB collections.
+
+Key differences from VectorDBDriver (ChromaDB):
+1. Connection Management: Uses psycopg3 connections instead of ChromaDB client
+2. Population Methods: Takes list of dict records instead of pandas DataFrames
+3. Not Implemented: qualitative_table_name_search, qualitative_db_name_search, store_column_info_in_db
+4. Context Manager: Supports 'with' statement for automatic connection cleanup
+
+Usage:
+    config = NeonDBConfig(conn_string="postgresql://...")
+    with NeonVectorDBDriver(config, embedding_fn) as driver:
+        driver.populate_column_info(records)
+        results = driver.get_closest_data_from_description(...)
+"""
 from __future__ import annotations
 import os
 from dataclasses import dataclass
@@ -12,10 +30,6 @@ from nlqs.vectordb_driver import (
     ClosestDataResult,
     QualitativeSearchResult,
 )
-
-# NOTE:
-# - This driver mirrors the public methods NLQS uses from VectorDBDriver
-# - It uses Postgres/Neon with pgvector to store/query embeddings
 
 
 @dataclass
