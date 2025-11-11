@@ -523,3 +523,39 @@ class NeonVectorDBDriver:
                         for r in batch
                     ],
                 )
+    
+    # ---------- Methods not implemented (not used by NLQS core) ----------
+    def store_column_info_in_db(
+        self,
+        column_name: str,
+        description: str,
+        column_type: ColumnType,
+    ) -> None:
+        """Store column information in the database.
+        
+        Note: This method is not implemented as it's not used by NLQS core functionality.
+        Use populate_column_info() for batch operations instead.
+        """
+        raise NotImplementedError(
+            "store_column_info_in_db is not implemented. Use populate_column_info() for batch operations."
+        )
+
+    def qualitative_table_name_search(self, data: Dict[str, str]) -> List[str]:
+        """Performs similarity search for table names.
+        
+        Note: This method is not implemented as it's not used by NLQS core functionality.
+        """
+        raise NotImplementedError(
+            "qualitative_table_name_search is not implemented. "
+            "This feature is not currently used by NLQS."
+        )
+
+    def qualitative_db_name_search(self, data: Dict[str, str]) -> List[str]:
+        """Performs similarity search for database names.
+        
+        Note: This method is not implemented as it's not used by NLQS core functionality.
+        """
+        raise NotImplementedError(
+            "qualitative_db_name_search is not implemented. "
+            "This feature is not currently used by NLQS."
+        )
