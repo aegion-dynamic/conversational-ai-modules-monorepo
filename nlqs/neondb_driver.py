@@ -302,10 +302,21 @@ class NeonVectorDBDriver:
 
         ret: List[ClosestDataResult] = []
         for r in rows:
+            lookup_key = str(r["lookup_key_column_name"])
+            column_value = r["lookup_key_column_value"]
+            # Try to preserve int type if possible, otherwise convert to string
+            if isinstance(column_value, int):
+                col_val = column_value
+            else:
+                try:
+                    col_val = int(column_value)
+                except (ValueError, TypeError):
+                    col_val = str(column_value)
+            
             ret.append(
                 {
-                    "lookup_key": str(r["lookup_key_column_name"]),
-                    "column_value": str(r["lookup_key_column_value"]),
+                    "lookup_key": lookup_key,
+                    "column_value": col_val,
                     "data": str(r["description"]),
                 }
             )
