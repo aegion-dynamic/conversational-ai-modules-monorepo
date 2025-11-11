@@ -30,6 +30,28 @@ class NeonDBConfig:
 
 
 def _to_vector_literal(embedding: List[float]) -> str:
+    """Convert a list of floats to pgvector literal format.
+    
+    Args:
+        embedding: List of float values
+        
+    Returns:
+        String in pgvector format: '[0.1,0.2,0.3]'
+        
+    Raises:
+        ValueError: If embedding is empty or contains invalid values
+    """
+    if not embedding:
+        raise ValueError("Embedding list cannot be empty")
+    
+    # Check for invalid values (NaN, Infinity)
+    import math
+    for i, x in enumerate(embedding):
+        if not isinstance(x, (int, float)):
+            raise ValueError(f"Embedding value at index {i} must be numeric, got {type(x)}")
+        if math.isnan(x) or math.isinf(x):
+            raise ValueError(f"Embedding contains invalid value at index {i}: {x}")
+    
     # pgvector accepts literals like: '[0.1,0.2,0.3]'
     return "[" + ",".join(f"{x:.8f}" for x in embedding) + "]"
 
