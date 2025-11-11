@@ -90,10 +90,21 @@ class NeonVectorDBDriver:
         self.initialize_nlqs_vectordb(self.config)
 
     def close(self):
+        """Close the database connection."""
         try:
-            self._conn.close()
+            if self._conn and not self._conn.closed:
+                self._conn.close()
         except Exception:
             pass
+    
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - ensures connection is closed."""
+        self.close()
+        return False
 
     # ---------- Schema management ----------
     def check_nlqs_collections_exists(self) -> bool:
