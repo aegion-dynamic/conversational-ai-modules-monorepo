@@ -165,6 +165,8 @@ class NeonVectorDBDriver:
                 )
 
                 # Recommended IVF indexes for cosine distance (adjust lists as needed)
+                # Note: IVFFlat indexes require data to be present first. If tables are empty,
+                # indexes can be created later after data population.
                 try:
                     cur.execute(
                         f"""
@@ -190,9 +192,14 @@ class NeonVectorDBDriver:
                         WITH (lists = 100);
                         """
                     )
-                except psycopg.Error:
+                except psycopg.Error as e:
                     # Index creation may require ANALYZE/populated data; not fatal
-                    pass
+                    # Common error: "ivfflat index build requires a non-empty table"
+                    import warnings
+                    warnings.warn(
+                        f"Could not create IVFFlat indexes (may require populated tables): {e}. "
+                        "This is not critical - indexes can be created manually later if needed."
+                    )
 
     @staticmethod
     def purge_nlqs_vectordb(config: NeonDBConfig) -> None:
