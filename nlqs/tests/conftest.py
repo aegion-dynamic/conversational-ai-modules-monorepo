@@ -127,22 +127,55 @@ def pg_config():
 
 @pytest.fixture(scope="function")
 def setup_postgres_database():
-    """Setup method to create a test database and driver instance."""
+    """Setup method to create a test database and driver instance using product_descriptions.csv data."""
+    # Load the product descriptions CSV
+    csv_path = Path("./examples/nlqs_demo/product_descriptions.csv")
+    products_df = pd.read_csv(csv_path)
+    
     with psycopg2.connect(
         host="localhost", port=5432, user="postgres", password="postgres", database="postgres"
     ) as conn:
         cursor = conn.cursor()
+        
+        # Create table with schema matching the CSV
         cursor.execute(
             f"""
             CREATE TABLE {DEFAULT_TABLE_NAME} (
                 id SERIAL PRIMARY KEY,
-                name TEXT,
-                value REAL
+                Location TEXT,
+                Room TEXT,
+                Product TEXT,
+                Category TEXT,
+                PackageID TEXT,
+                Batch TEXT,
+                CBD TEXT,
+                THC TEXT,
+                CBDA TEXT,
+                CBG TEXT,
+                CBN TEXT,
+                THCA TEXT,
+                CustomerRating INTEGER,
+                MedicalBenefitsReported TEXT,
+                RepeatPurchaseFrequency TEXT,
+                URL TEXT,
+                Description TEXT
             )
             """
         )
-        cursor.execute(f"INSERT INTO {DEFAULT_TABLE_NAME} (name, value) VALUES ('John', 10.5)")
-        cursor.execute(f"INSERT INTO {DEFAULT_TABLE_NAME} (name, value) VALUES ('Jane', 20.0)")
+        
+        # Insert data from CSV
+        for _, row in products_df.iterrows():
+            cursor.execute(
+                f"""
+                INSERT INTO {DEFAULT_TABLE_NAME} 
+                (Location, Room, Product, Category, PackageID, Batch, CBD, THC, CBDA, CBG, CBN, THCA, 
+                 CustomerRating, MedicalBenefitsReported, RepeatPurchaseFrequency, URL, Description)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                tuple(row)
+            )
+        
+        conn.commit()
 
     yield
 
@@ -150,7 +183,6 @@ def setup_postgres_database():
         host="localhost", port=5432, user="postgres", password="postgres", database="postgres"
     ) as conn:
         cursor = conn.cursor()
-
         cursor.execute(f"DROP TABLE {DEFAULT_TABLE_NAME}")
 
 
@@ -197,12 +229,22 @@ def vectordb_driver(chroma_config, embedding_function):
 
 
 @pytest.fixture(scope="function")
-def embedding_function() -> (
-    Callable[[str], List[float]]
-):
-
+def embedding_function() -> Callable[[str], List[float]]:
+    """Azure OpenAI embedding function fixture."""
     # Initialize the Azure OpenAI Embedding model
-    embedding_model = get_default_embedding_function(use_azure=True)
+    embedding_model = get_default_embedding_function(use_azure=True, use_local=False)
+
+    # Create an embedding function
+    embedding_function = embedding_model.embed_query
+
+    return embedding_function
+
+
+@pytest.fixture(scope="function")
+def bge_embedding_function() -> Callable[[str], List[float]]:
+    """Local BGE embedding function fixture."""
+    # Initialize the local BGE Embedding model
+    embedding_model = get_default_embedding_function(use_local=True)
 
     # Create an embedding function
     embedding_function = embedding_model.embed_query
