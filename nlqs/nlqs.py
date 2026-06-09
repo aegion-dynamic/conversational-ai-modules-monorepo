@@ -3,18 +3,16 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple, Union, cast
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 from nlqs.database.postgres import PostgresConnectionConfig, PostgresDriver
 from nlqs.database.sqlite import SQLiteConnectionConfig, SQLiteDriver
+from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME
 from nlqs.query_construction import (
     construct_categorical_search_query_fragments,
     construct_descriptive_search_query_fragments,
-    construct_final_search_query,
     construct_quantitaive_search_query_fragments,
-    construct_identifier_search_query_fragments,  # Added this import
+    construct_identifier_search_query_fragments,
 )
 from nlqs.summarization import summarize
 from nlqs.vectordb_driver import ChromaDBConfig, VectorDBDriver
@@ -30,6 +28,9 @@ class NLQSResult:
     records: List[Dict[str, Any]]
     uris: List[str]
     is_input_irrelevant: bool = False
+    # Whether the records are an exact match (intersection of all constraints) or a
+    # "related" fallback (union of constraints). True when there are no records.
+    is_exact_match: bool = True
 
 
 class NLQS:
@@ -37,6 +38,8 @@ class NLQS:
         self,
         connection_config: Union[SQLiteConnectionConfig, PostgresConnectionConfig],
         chroma_config: Union[ChromaDBConfig, NeonDBConfig],
+        use_azure_llm: bool = True,
+        use_local_embeddings: bool = True,
     ) -> None:
         logger.info("Initializing NLQS...")
 
@@ -61,12 +64,14 @@ class NLQS:
 
         # Create the llm object
         logger.debug("Initializing LLM...")
-        self.llm = get_default_llm(use_azure=True)
+        self.llm = get_default_llm(use_azure=use_azure_llm)
         logger.info("LLM initialized")
 
-        # Initialize the Embedding model - CHANGED: Use local BGE model instead of Azure
+        # Initialize the Embedding model (local BGE by default)
         logger.debug("Initializing embedding model...")
-        embedding_model = get_default_embedding_function(use_local=True)
+        embedding_model = get_default_embedding_function(
+            use_local=use_local_embeddings, use_azure=not use_local_embeddings
+        )
         embedding_function = embedding_model.embed_query
         logger.info("Embedding model initialized")
 
@@ -83,6 +88,11 @@ class NLQS:
         self.table_name = connection_config.dataset_table_name
         self.uri_column = connection_config.uri_column
         self.output_columns = connection_config.output_columns
+
+        # Identifiers used to tag/filter vectors for this dataset. Decoupled from the
+        # SQL connection identifiers; default to the NLQS defaults when not configured.
+        self.vector_db_name = getattr(self.chroma_config, "vector_db_name", DEFAULT_DB_NAME)
+        self.vector_table_name = getattr(self.chroma_config, "vector_table_name", DEFAULT_TABLE_NAME)
 
         # Test if all infrastructure is available
         logger.debug("Checking vector collections...")
@@ -104,13 +114,7 @@ class NLQS:
         logger.debug("Retrieving column descriptions from vector database...")
         column_descriptions_dict = self.vectordb_driver.retrieve_descriptions_and_types_from_db()
 
-        print("*" * 200)
-
-        print(f"column_descriptions_dict: {column_descriptions_dict}")
-
-        import json
-
-        print(json.dumps(column_descriptions_dict, indent=2))
+        logger.debug(f"column_descriptions_dict: {column_descriptions_dict}")
 
         if column_descriptions_dict is None:
             logger.error("No data found in the database")
@@ -141,8 +145,9 @@ class NLQS:
 
         # Step 7 - Generate summary
         logger.debug("Generating input summary...")
-        try:
-            summarized_input = summarize(
+
+        def _summarize() -> Any:
+            return summarize(
                 user_input=user_input,
                 chat_history=chat_history,
                 column_descriptions_dictionary=column_descriptions_dict["column_descriptions"],
@@ -151,28 +156,17 @@ class NLQS:
                 descriptive_columns=column_descriptions_dict["descriptive_columns"],
                 llm=self.llm,
                 vectordb=cast(Any, self.vectordb_driver),
+                identifier_columns=column_descriptions_dict.get("identifier_columns", []),
+                db_name=self.vector_db_name,
+                table_name=self.vector_table_name,
             )
+
+        try:
+            summarized_input = _summarize()
             logger.debug(f"Generated summary: {summarized_input}")
         except Exception as e:
             logger.error(f"Error generating summary: {str(e)}", exc_info=True)
             raise
-
-        count = 0
-        print(f"summarized_input: {summarized_input}")
-        while not summarized_input.summary and count < 5:
-            summarized_input = summarize(
-                user_input=user_input,
-                chat_history=chat_history,
-                column_descriptions_dictionary=column_descriptions_dict["column_descriptions"],
-                numerical_columns=column_descriptions_dict["numerical_columns"],
-                categorical_columns=column_descriptions_dict["categorical_columns"],
-                descriptive_columns=column_descriptions_dict["descriptive_columns"],
-                llm=self.llm,
-                vectordb=cast(Any, self.vectordb_driver),
-            )
-            count += 1
-            if count == 5:
-                raise ValueError("Unable to summarize the data.")
 
         intent = summarized_input.user_intent
 
@@ -180,6 +174,8 @@ class NLQS:
         logger.info(f"user input: {user_input}")
         logger.info(f"Summarized input: {summarized_input}")
 
+        # Handle non-data intents before anything else so that greetings and
+        # malicious inputs are short-circuited instead of being retried.
         if intent == "sql_injection":
             # Kill the workflow if the user input is a SQL injection
             return NLQSResult(records=[], uris=[], is_input_irrelevant=True)
@@ -187,9 +183,17 @@ class NLQS:
             # Kill the workflow if the user input is phatic communication
             return NLQSResult(records=[], uris=[], is_input_irrelevant=True)
 
-        # TODO: Figure out other intents in the future
-        else:
-            ...
+        # Retry summarization a bounded number of times if no summary was produced.
+        # An empty summary after retries is treated as an irrelevant input rather
+        # than a hard failure.
+        count = 0
+        while not summarized_input.summary and count < 5:
+            summarized_input = _summarize()
+            count += 1
+
+        if not summarized_input.summary:
+            logger.info("Unable to summarize the input; treating it as irrelevant.")
+            return NLQSResult(records=[], uris=[], is_input_irrelevant=True)
 
         # This is the standard workflow for the NLQS
 
@@ -198,7 +202,7 @@ class NLQS:
         #     if column not in column_descriptions:
         #         raise ValueError(f"Column {column} not found in the database.")
 
-        print("checking for user requested columns...")
+        logger.debug("checking for user requested columns...")
         if len(summarized_input.user_requested_columns) > 0:
             numerical_data = summarized_input.numerical_data
             categorical_data = summarized_input.categorical_data
@@ -207,12 +211,14 @@ class NLQS:
 
             # Pass the LLM instance to the quantitative query construction functions
             logger.debug("Constructing query fragments...")
-            # FIXED: Use proper identifier function instead of quantitative
             identifier_query_fragments = construct_identifier_search_query_fragments(identifier_data)
             quantitative_query_fragments = construct_quantitaive_search_query_fragments(numerical_data, self.llm)
             categorical_query_fragments = construct_categorical_search_query_fragments(categorical_data)
             descriptive_query_fragments = construct_descriptive_search_query_fragments(
-                descriptive_data, cast(Any, self.vectordb_driver)
+                descriptive_data,
+                cast(Any, self.vectordb_driver),
+                db_name=self.vector_db_name,
+                table_name=self.vector_table_name,
             )
 
             logger.debug(
@@ -223,19 +229,9 @@ class NLQS:
                 f"Descriptive: {len(descriptive_query_fragments)}"
             )
 
-            # Construct a search field that will capture all the data from the user input
-            # Determine database name based on driver type
-            if hasattr(self.connection_driver.db_config, "database_name"):
-                # PostgreSQL case - has database_name attribute
-                database_name = str(self.connection_driver.db_config.database_name)  # type: ignore
-            elif hasattr(self.connection_driver.db_config, "db_file"):
-                # SQLite case - has db_file attribute
-                database_name = str(self.connection_driver.db_config.db_file)  # type: ignore
-            else:
-                # Fallback
-                database_name = "default_db"
-
-            # Then use database_name in the SearchField.construct_search_field call:
+            # Construct a search field that runs the per-field-type queries, intersects
+            # the resulting primary keys (exact match) and falls back to a union
+            # (related match) when the intersection is empty.
             search_field_object = SearchField.construct_search_field(
                 descriptive_query_fragments=[
                     fragment for fragments in descriptive_query_fragments.values() for fragment in fragments
@@ -244,24 +240,15 @@ class NLQS:
                 identifier_query_fragments=identifier_query_fragments,
                 quantitative_query_fragments=quantitative_query_fragments,
                 database_driver=self.connection_driver,
-                database_name=database_name,  # Use the determined database name
+                database_name=self.vector_db_name,
                 table_name=self.table_name,  # Use actual table name from config
+                primary_key=primary_key,
             )
 
-            # Get all search results from the search field
-            search_results = search_field_object.get_results()
-            print(f"Search results: {search_results}")
-
-            # Extract primary keys from search results
-            all_primary_keys = []
-            if "default" in search_results:
-                for row in search_results["default"]:
-                    if row and len(row) > 0:
-                        # Assuming first column is primary key
-                        all_primary_keys.append(row[0])
-
-            # Remove duplicates while preserving order
-            unique_primary_keys = list(dict.fromkeys(all_primary_keys))
+            # Aggregated primary keys and whether they were an exact match
+            unique_primary_keys = list(dict.fromkeys(search_field_object.get_primary_keys()))
+            is_exact_match = search_field_object.is_exact_match
+            logger.debug(f"Search produced {len(unique_primary_keys)} primary keys (exact={is_exact_match})")
 
             if not unique_primary_keys:
                 logger.info("No matching records found")
@@ -300,7 +287,7 @@ class NLQS:
                 uris = []
 
                 if not data_retrieved:
-                    result = NLQSResult(records=[], uris=[])
+                    result = NLQSResult(records=[], uris=[], is_exact_match=is_exact_match)
                 else:
                     # Process the retrieved data
                     for row in data_retrieved:
@@ -319,11 +306,10 @@ class NLQS:
                         records.append(record)
 
                     # Create the result object
-                    result = NLQSResult(records=records, uris=uris)
+                    result = NLQSResult(records=records, uris=uris, is_exact_match=is_exact_match)
 
                 logger.info(f"Query executed: {final_query}")
-                logger.info(f"Found {len(records)} records")
-                print(f"result: {result}")
+                logger.info(f"Found {len(records)} records (exact_match={is_exact_match})")
         else:
             logger.info("No user requested columns found")
             result = NLQSResult(records=[], uris=[])
