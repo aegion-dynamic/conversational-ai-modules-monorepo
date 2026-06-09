@@ -1,6 +1,4 @@
 from typing import Dict, List, Union
-from unittest.mock import DEFAULT
-import json
 import logging
 
 from langchain_core.output_parsers import StrOutputParser
@@ -234,21 +232,47 @@ def construct_identifier_search_query_fragments(identifier_data: Dict[str, str])
     return query_parts
 
 
+def _format_in_value(value: str) -> str:
+    """Format a lookup value for use inside a SQL ``IN (...)`` clause.
+
+    Numeric values are emitted as-is; everything else is treated as a string and
+    wrapped in single quotes (with embedded quotes escaped) so that string
+    primary/lookup keys produce valid SQL.
+
+    Args:
+        value (str): The raw lookup value.
+
+    Returns:
+        str: The SQL-safe representation of the value.
+    """
+    try:
+        float(value)
+        return str(value)
+    except (ValueError, TypeError):
+        escaped = str(value).replace("'", "''")
+        return f"'{escaped}'"
+
+
 def construct_descriptive_search_query_fragments(
-    descriptive_data: Dict[str, str], vectordb_driver: VectorDBDriver
+    descriptive_data: Dict[str, str],
+    vectordb_driver: VectorDBDriver,
+    db_name: str = DEFAULT_DB_NAME,
+    table_name: str = DEFAULT_TABLE_NAME,
 ) -> Dict[str, List[str]]:
     """Creates an SQL query from a dictionary of descriptive data.
 
     Args:
         descriptive_data (Dict[str, str]):  A dictionary of descriptive data in the form {'column_name': 'condition'}.
         vectordb_driver: The vector database driver
+        db_name (str): The database name used to filter the vector store.
+        table_name (str): The table name used to filter the vector store.
 
     Returns:
         Dict[str, List[str]]: A dictionary of the generated SQL query fragments where the key is the column name.
     """
 
     results = vectordb_driver.qualitative_dataset_search(
-        data=descriptive_data, db_name=DEFAULT_DB_NAME, table_name=DEFAULT_TABLE_NAME
+        data=descriptive_data, db_name=db_name, table_name=table_name
     )
 
     if not results:
@@ -269,7 +293,7 @@ def construct_descriptive_search_query_fragments(
 
         # Construct the query part for each primary key column
         for pk_column_name, values in temp_storage.items():
-            values_list = ", ".join(f"{value}" for value in values)
+            values_list = ", ".join(_format_in_value(value) for value in values)
             query_part = f"{pk_column_name} IN ({values_list})"
             query_parts.append(query_part)
 

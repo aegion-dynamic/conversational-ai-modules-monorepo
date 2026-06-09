@@ -197,7 +197,10 @@ def chroma_config():
 
 
 @pytest.fixture(scope="function")
-def vectordb_driver(chroma_config, embedding_function):
+def vectordb_driver(chroma_config, bge_embedding_function):
+    # Use the local BGE (384-dim) embedder so that query-time embeddings match the
+    # 384-dim vectors stored in the test TSV fixtures.
+    embedding_function = bge_embedding_function
 
     VectorDBDriver.purge_nlqs_vectordb(chroma_config)
 

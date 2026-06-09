@@ -40,19 +40,19 @@ Table Descriptions Collection (name: nlqs_table_descriptions)
 from __future__ import annotations
 
 import ast
-import collections
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, TypedDict, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict, Union
 
 import chromadb
 from chromadb import QueryResult
 from chromadb.api import ClientAPI
 from chromadb.config import Settings
-from click import Option
 from pandas import DataFrame
 from tqdm import tqdm
+
+from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME
 
 DEFAULT_COLUMN_INFO_COLLECTION_NAME = "nlqs_column_info"
 DEFAULT_DATASET_COLLECTION_NAME = "nlqs_descriptive_data"
@@ -148,6 +148,11 @@ class ChromaDBConfig:
     is_local: bool = True
     username: Optional[str] = None
     password: Optional[str] = None
+    # Identifiers used to tag/filter vectors for this dataset. These are decoupled
+    # from the SQL connection identifiers so the vector store can be populated and
+    # queried consistently regardless of the physical database name.
+    vector_db_name: str = DEFAULT_DB_NAME
+    vector_table_name: str = DEFAULT_TABLE_NAME
 
 
 def create_chroma_client(chroma_config: ChromaDBConfig) -> ClientAPI:
@@ -484,9 +489,10 @@ class VectorDBDriver:
 
         # Do a chromadb query to get the closest data from the dataset collection
         # filter by the database name, table names, and column name
+        embedding = self.embedding_function(str(description))
 
         results = self.dataset_collection.query(
-            query_texts=[description],
+            query_embeddings=[embedding],
             where={
                 "$and": [
                     {"db_name": {"$eq": database_name}},
@@ -497,19 +503,29 @@ class VectorDBDriver:
             n_results=5,
         )
 
-        ret = []
-        if not results["documents"] or not results["metadatas"]:
+        ret: List[ClosestDataResult] = []
+
+        documents = results.get("documents") or []
+        metadatas = results.get("metadatas") or []
+        if not documents or not metadatas:
             return ret
 
-        for index, document in enumerate(results["documents"]):
-            metadata = results["metadatas"][index][0]
-            lookup_key = metadata["lookup_key_column_name"]
-            lookup_value = metadata["lookup_key_column_value"]
-            if not isinstance(lookup_key, int):
+        # Chroma nests results per query; we only issued a single query.
+        document_list = documents[0]
+        metadata_list = metadatas[0]
+
+        for document, metadata in zip(document_list, metadata_list):
+            lookup_key = metadata.get("lookup_key_column_name")
+            lookup_value = metadata.get("lookup_key_column_value")
+            if lookup_value is None:
                 continue
-            if not isinstance(lookup_value, (str, int)):
-                continue
-            ret.append({"lookup_key": lookup_key, "column_value": lookup_value, "data": document})
+            ret.append(
+                {
+                    "lookup_key": str(lookup_key),
+                    "column_value": lookup_value,
+                    "data": str(document),
+                }
+            )
 
         # Return the lookup key, column value and the actual data
         return ret
