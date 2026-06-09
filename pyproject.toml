@@ -12,7 +12,8 @@ packages = [
     { include = "utils" },
     { include = "tog"},
     { include = "state_machine" },
-    { include = "llms"}
+    { include = "llms"},
+    { include = "parts_catalogue"}
 ]
 
 [tool.poetry.dependencies]
