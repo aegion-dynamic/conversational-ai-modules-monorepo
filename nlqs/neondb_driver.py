@@ -24,6 +24,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 import psycopg
 from psycopg.rows import dict_row
 
+from nlqs.parameters import DEFAULT_DB_NAME, DEFAULT_TABLE_NAME
 from nlqs.vectordb_driver import (
     ColumnType,
     ColumnDescriptions,
@@ -40,7 +41,13 @@ class NeonDBConfig:
     column_info_table: str = "nlqs_column_info"          # mirrors nlqs_column_info collection
     dataset_table: str = "nlqs_descriptive_data"         # mirrors nlqs_descriptive_data collection
     table_desc_table: str = "nlqs_table_descriptions"    # mirrors nlqs_table_descriptions collection
-    embedding_dim: int = 1536                            # match your embedding function dimension
+    # Default matches the local BGE (BAAI/bge-small-en-v1.5) embedding function
+    # used by NLQS. Override to match a different embedding function.
+    embedding_dim: int = 384                             # match your embedding function dimension
+    # Identifiers used to tag/filter vectors for this dataset (decoupled from the
+    # SQL connection identifiers).
+    vector_db_name: str = DEFAULT_DB_NAME
+    vector_table_name: str = DEFAULT_TABLE_NAME
     
     def __post_init__(self):
         """Load connection string from environment if not provided."""
