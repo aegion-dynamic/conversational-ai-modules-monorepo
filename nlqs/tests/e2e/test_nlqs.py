@@ -3,7 +3,7 @@ from nlqs.nlqs import NLQS, ChromaDBConfig
 from nlqs.neondb_driver import NeonDBConfig
 
 
-def test_nlsq_api(chroma_config, pg_config, setup_postgres_database):
+def test_nlsq_api(chroma_config, pg_config, setup_postgres_database, vectordb_driver):
     nlsq = NLQS(
         connection_config=pg_config,
         chroma_config=chroma_config,
